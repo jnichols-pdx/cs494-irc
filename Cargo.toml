@@ -20,3 +20,7 @@ path = "src/server/serv_main.rs"
 [[bin]]
 name = "client"
 path = "src/client/client_main.rs"
+
+[lib]
+name = "irclib"
+path = "src/lib.rs"
