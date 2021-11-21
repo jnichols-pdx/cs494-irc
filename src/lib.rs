@@ -8,9 +8,14 @@ use bytes::{Bytes, BytesMut, Buf, BufMut};
 use std::convert::TryInto;
 use thiserror::Error;
 use std::io;
+use lazy_static::lazy_static;
+use regex::Regex;
+
+/// Result type for IRC  errors.
+pub type Result<'a, T> = std::result::Result<T, IrcError>;
 
 #[allow(non_camel_case_types)]
-#[allow(dead_code)]
+//#[allow(dead_code)]
 #[derive(Copy,Clone,FromPrimitive)]
 pub enum IrcKind {
     IRC_KIND_ERR = 0x01,
@@ -41,19 +46,19 @@ pub enum IrcError {
     #[error("Cannot Be Empty")]
     InvalidEmpty(),
     #[error("Too Big: {0} bytes used, {1} bytes available")]
-    TooManyBytes(i32, i32),
+    TooManyBytes(usize, usize),
     #[error("Invalid Name Content")]
     InvalidNameContent(),
     #[error("Name Too Long: {0} codepoints")]
-    NameTooLong(i32),
+    NameTooLong(usize),
     #[error("Invalid Message Content")]
     InvalidMessageContent(),
     #[error("Message Too Long: {0} codepoints")]
-    MessageTooLong(i32),
+    MessageTooLong(usize),
     #[error("Invalid Filename Content")]
     InvalidFilenameContent(),
     #[error("Filename Too Long: {0} codepoints")]
-    FilenameTooLong(i32),
+    FilenameTooLong(usize),
 
     //Wrappers around library errors we may encounter
     #[error("Encountered IO Error: {0}")]
@@ -66,8 +71,39 @@ impl From<io::Error> for IrcError {
     }
 }
 
-/// Result type for directory errors.
-pub type Result<'a, T> = std::result::Result<T, IrcError>;
+
+
+pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
+    //NAMES
+    //must be 64 bytes or less in utf-8 encoding,
+    //must be 32 codepoints or less,
+    //must not have 0x00-0x20 (low ascii command codes),
+    //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
+
+    let byte_size = name.len();
+    if byte_size > 64 {
+        return Err(IrcError::TooManyBytes(byte_size, 64));
+    }
+
+
+    let num_points = name.chars().count();
+    if num_points  == 0 {
+        return Err(IrcError::InvalidEmpty());
+    }
+    if num_points > 32 {
+        return Err(IrcError::NameTooLong(num_points));
+    }
+
+    lazy_static! {
+        static ref REN: Regex = Regex::new("[\u{00}-\u{1F}\u{20}\u{202A}-\u{202E}\u{2066}-\u{2069}\u{200E}\u{200F}\u{061C}]").unwrap();
+    }
+    if REN.is_match(name) {
+        return Err(IrcError::InvalidNameContent());
+    }
+
+    Ok(name)
+}
+
 
 
 
@@ -75,12 +111,6 @@ pub struct HelloPacket {
     //pub chat_name: [u8; 64],
     pub chat_name: String,
 }
-
-
-pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
-        //match name.find
-        Ok(name)
-    }
 
 impl HelloPacket {
     //pub fn as_bytes(self) -> [u8;69] {
@@ -132,3 +162,85 @@ impl HelloPacket {
 
 }
 
+
+#[test]
+fn test_reject_name_chars() {
+        assert!(valid_name(&"blah".to_string()).is_ok());  //text is ok
+
+        //ascii low control chars are not
+        assert!(valid_name(&"bla    h".to_string()).is_err()); //ascii tab is in low control, not ok
+        assert!(valid_name(&"bla\x00h".to_string()).is_err());
+        assert!(valid_name(&"bla\x01h".to_string()).is_err());
+        assert!(valid_name(&"bla\x02h".to_string()).is_err());
+        assert!(valid_name(&"bla\x03h".to_string()).is_err());
+        assert!(valid_name(&"bla\x04h".to_string()).is_err());
+        assert!(valid_name(&"bla\x05h".to_string()).is_err());
+        assert!(valid_name(&"bla\x06h".to_string()).is_err());
+        assert!(valid_name(&"bla\x07h".to_string()).is_err());
+        assert!(valid_name(&"bla\x08h".to_string()).is_err());
+        assert!(valid_name(&"bla\x09h".to_string()).is_err());
+        assert!(valid_name(&"bla\x0Ah".to_string()).is_err());
+        assert!(valid_name(&"bla\x0Bh".to_string()).is_err());
+        assert!(valid_name(&"bla\x0Ch".to_string()).is_err());
+        assert!(valid_name(&"bla\x0Dh".to_string()).is_err());
+        assert!(valid_name(&"bla\x0Eh".to_string()).is_err());
+        assert!(valid_name(&"bla\x0Fh".to_string()).is_err());
+        assert!(valid_name(&"bla\x10h".to_string()).is_err());
+        assert!(valid_name(&"bla\x11h".to_string()).is_err());
+        assert!(valid_name(&"bla\x12h".to_string()).is_err());
+        assert!(valid_name(&"bla\x13h".to_string()).is_err());
+        assert!(valid_name(&"bla\x14h".to_string()).is_err());
+        assert!(valid_name(&"bla\x15h".to_string()).is_err());
+        assert!(valid_name(&"bla\x16h".to_string()).is_err());
+        assert!(valid_name(&"bla\x17h".to_string()).is_err());
+        assert!(valid_name(&"bla\x18h".to_string()).is_err());
+        assert!(valid_name(&"bla\x19h".to_string()).is_err());
+        assert!(valid_name(&"bla\x1Ah".to_string()).is_err());
+        assert!(valid_name(&"bla\x1Bh".to_string()).is_err());
+        assert!(valid_name(&"bla\x1Ch".to_string()).is_err());
+        assert!(valid_name(&"bla\x1Dh".to_string()).is_err());
+        assert!(valid_name(&"bla\x1Eh".to_string()).is_err());
+        assert!(valid_name(&"bla\x1Fh".to_string()).is_err());
+
+
+        //spaces are not ok
+        assert!(valid_name(&"bla h".to_string()).is_err());
+        assert!(valid_name(&"bla\x20h".to_string()).is_err());
+
+        //bidi go byebye
+        assert!(valid_name(&"bla\u{061C}h".to_string()).is_err());
+
+        assert!(valid_name(&"bla\u{200E}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{200F}h".to_string()).is_err());
+
+        assert!(valid_name(&"bla\u{202A}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{202B}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{202C}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{202D}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{202E}h".to_string()).is_err());
+
+        assert!(valid_name(&"bla\u{2066}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{2067}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{2068}h".to_string()).is_err());
+        assert!(valid_name(&"bla\u{2069}h".to_string()).is_err());
+}
+
+#[test]
+fn test_reject_name_length() {
+        assert!(valid_name(&"hunter2".to_string()).is_ok());  //short names are OK
+
+        assert!(valid_name(&"abcdefghijklmnopqrstuvwxyz1234567890".to_string()).is_err()); //long names are not
+
+        assert!(valid_name(&"12345678901234567890123456789012".to_string()).is_ok()); //max length is OK
+        assert!(valid_name(&"123456789012345678901234567890123".to_string()).is_err()); //one more is not
+        assert!(valid_name(&"".to_string()).is_err()); //empty strings are not
+        assert!(valid_name(&"123456789012345678901234567890™™".to_string()).is_ok()); //multibyte unicode count as one and are OK
+        assert!(valid_name(&"123456789012345678901234567890™™™".to_string()).is_err()); //multibyte unicode count as one, but may still push us over the limit.
+
+        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™".to_string()).is_ok()); //63 bytes is OK
+        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™A".to_string()).is_ok()); //64 bytes is OK
+        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™AB".to_string()).is_err()); //65 bytes is not OK
+        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™™".to_string()).is_err()); //66 bytes is not ok
+
+
+}
