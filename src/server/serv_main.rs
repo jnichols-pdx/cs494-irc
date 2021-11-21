@@ -48,7 +48,7 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
     let mut empty_rooms = Vec::new();
 
 
-    let mut buffer = [0; 256];
+    let mut buffer = [0u8; 256];
     let mut buff_b = BytesMut::with_capacity(69);
     let mut bytes_read;
     let client_name;
@@ -58,7 +58,8 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
         //println!("{}",std::str::from_utf8(&buffer[0..bytes_read]).unwrap());
        buff_b.extend_from_slice(&buffer[0..69]);
         let pack = HelloPacket::from_bytes(&mut  Bytes::from(buff_b));
-        client_name = String::from_utf8(pack.chat_name.to_vec()).unwrap();
+        //client_name = String::from_utf8(pack.chat_name.to_vec()).unwrap();
+        client_name = pack.chat_name;
     } else {
        client_name = "jane doe".to_string();
     }
