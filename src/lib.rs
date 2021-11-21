@@ -5,7 +5,7 @@
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use bytes::{Bytes, BytesMut, Buf, BufMut};
-use std::convert::TryInto;
+use std::convert::{TryInto, TryFrom};
 use thiserror::Error;
 use std::io;
 use lazy_static::lazy_static;
@@ -16,7 +16,7 @@ pub type Result<'a, T> = std::result::Result<T, IrcError>;
 
 #[allow(non_camel_case_types)]
 //#[allow(dead_code)]
-#[derive(Copy,Clone,FromPrimitive)]
+#[derive(Copy,Clone,FromPrimitive,PartialEq)]
 pub enum IrcKind {
     IRC_KIND_ERR = 0x01,
     IRC_KIND_NEW_CLIENT = 0x02,
@@ -39,6 +39,23 @@ pub enum IrcKind {
     IRC_KIND_SERVER_DEPARTS = 0x13,
 }
 
+#[allow(non_camel_case_types)]
+//#[allow(dead_code)]
+#[derive(Copy,Clone,FromPrimitive,PartialEq)]
+pub enum IrcErrCode {
+    IRC_ERR_UNKNOWN = 0x01,
+    IRC_ERR_ILLEGAL_KIND = 0x02,
+    IRC_ERR_ILLEGAL_LENGTH = 0x03,
+    IRC_ERR_NAME_IN_USE = 0x04,
+    IRC_ERR_ILLEGAL_NAME = 0x05,
+    IRC_ERR_ILLEGAL_MESSAGE = 0x06,
+    IRC_ERR_ILLEGAL_TRANSFER = 0x07,
+    IRC_ERR_TOO_MANY_USERS = 0x08,
+    IRC_ERR_TOO_MANY_ROOMS = 0x09,
+}
+
+//Internal Rust errors, NOT necessarily equivalent to the IRC_ERR_* values contained in an
+//irc_packet_error message sent between client and server (aka not ErrorPackets).
 #[derive(Error, Debug)]
 pub enum IrcError {
 
@@ -60,9 +77,27 @@ pub enum IrcError {
     #[error("Filename Too Long: {0} codepoints")]
     FilenameTooLong(usize),
 
+    #[error("Packet size invalid, expecte {0} found {1}")]
+    PacketLengthIncorrect(usize, usize),
+
+    #[error("Field size invalid")]
+    FieldLengthIncorrect(),
+
+    #[error("Packet kind invalid")]
+    PacketMismatch(),
+
+    /*#[error("This packet was malformed")]
+    MalformedPacket(),*/
+
     //Wrappers around library errors we may encounter
     #[error("Encountered IO Error: {0}")]
     Io(io::Error),
+
+    #[error("Encountered FromUTF8 Error: {0}")]
+    FromUtf8Err(std::string::FromUtf8Error),
+
+    #[error("Encountered UTF8 Error: {0}")]
+    Utf8Err(std::str::Utf8Error),
 }
 
 impl From<io::Error> for IrcError {
@@ -71,13 +106,30 @@ impl From<io::Error> for IrcError {
     }
 }
 
+impl From<std::string::FromUtf8Error> for IrcError {
+    fn from(err: std::string::FromUtf8Error) -> IrcError {
+        IrcError::FromUtf8Err(err)
+    }
+}
+
+impl From<std::str::Utf8Error> for IrcError {
+    fn from(err: std::str::Utf8Error) -> IrcError {
+        IrcError::Utf8Err(err)
+    }
+}
+
+
+///////////////////////////////////////////////
+// UTIL funcs
+///////////////////////////////////////////////
 
 
 pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
     //NAMES
     //must be 64 bytes or less in utf-8 encoding,
-    //must be 32 codepoints or less,
-    //must not have 0x00-0x20 (low ascii command codes),
+    //must be more than 0 and less than 32 codepoints,
+    //must not have 0x00-0x1f (low ascii command codes),
+    //must not have 0x20 (space character)
     //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
 
     let byte_size = name.len();
@@ -104,143 +156,212 @@ pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
     Ok(name)
 }
 
+pub fn valid_message<'a>(message: &'a String) -> Result<&'a String> {
+    //MESSAGES
+    //must be 12000 bytes or less in utf-8 encoding,
+    //must be more than 0 codepoints,
+    //must not have 0x00-0x19 (low ascii command codes),
+    //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
+    //must have \00 as the final byte.
+
+    let byte_size = message.len();
+    if byte_size > 12000 {
+        return Err(IrcError::TooManyBytes(byte_size, 64));
+    }
+
+    let num_points = message.chars().count();
+    if num_points  == 0 {
+        return Err(IrcError::InvalidEmpty());
+    }
+
+    lazy_static! {
+        static ref REM: Regex = Regex::new("[\u{01}-\u{08}\u{0A}-\u{1F}\u{202A}-\u{202E}\u{2066}-\u{2069}\u{200E}\u{200F}\u{061C}]").unwrap();
+    }
+    if REM.is_match(message) {
+        return Err(IrcError::InvalidMessageContent());
+    }
+
+    match message.find('\x00') {
+        None => {return Err(IrcError::InvalidMessageContent());},  //must end with one
+        Some(pos) => {
+            if pos != byte_size -1 { //may not appear before the end
+                return Err(IrcError::InvalidMessageContent());
+            }
+        }
+    };
+
+    Ok(message)
+}
+
+pub fn valid_filename<'a>(file_name: &'a String) -> Result<&'a String> {
+    //FILE NAMES
+    //may be up to 1024 bytes in utf-8 encoding,
+    //must be more than 0 codepoints,
+    //must not have 0x00-0x19 (low ascii command codes),
+    //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
+    //must not have 0x003A or 0x002F (file system path delimiters ':' and '/')
+
+    let byte_size = file_name.len();
+    if byte_size > 1024 {
+        return Err(IrcError::TooManyBytes(byte_size, 1024));
+    }
 
 
+    let num_points = file_name.chars().count();
+    if num_points  == 0 {
+        return Err(IrcError::InvalidEmpty());
+    }
 
-pub struct HelloPacket {
-    //pub chat_name: [u8; 64],
+    lazy_static! {
+        static ref REFN: Regex = Regex::new("[\u{00}-\u{1F}\u{202A}-\u{202E}\u{2066}-\u{2069}\u{200E}\u{200F}\u{061C}\u{003A}\u{002F}]").unwrap();
+    }
+    if REFN.is_match(file_name) {
+        return Err(IrcError::InvalidNameContent());
+    }
+
+    if file_name.starts_with(' ') || file_name.ends_with(' ') {
+        return Err(IrcError::InvalidNameContent());
+    }
+
+    Ok(file_name)
+}
+
+
+pub fn get_four_bytes_as_array(source: &[u8]) -> [u8;4] {
+   source.try_into().expect("Slice with incorrect length.")
+}
+
+pub fn u32_from_slice(source: &[u8]) -> u32 {
+    u32::from_be_bytes(get_four_bytes_as_array(&source[0..4]))
+}
+
+pub fn get_sixtyfour_bytes_as_array(source: &[u8]) -> [u8;64] {
+   source.try_into().expect("Slice with incorrect length.")
+}
+
+pub fn name_from_slice(source: &[u8]) -> Result<String> {
+    if source.len() != 64 {
+        return Err(IrcError::PacketLengthIncorrect(source.len(), 64));
+    }
+    match String::from_utf8(get_sixtyfour_bytes_as_array(&source[..]).to_vec()) {
+        Ok(mut n) => {
+            match n.find('\0') {
+                Some(pos) => { n.truncate(pos);
+                               Ok(n)
+                },
+                None => Ok(n),
+            }
+        },
+        Err(e) => Err(IrcError::FromUtf8Err(e))
+    }
+}
+
+pub fn string_from_slice(source: &[u8]) -> Result<String> {
+        let string_str = std::str::from_utf8(source)?;
+        let new_string: String  = string_str.into();
+        Ok(new_string)
+        //let new_name: String = name.try_into();//.expect("wrongslicelength");
+        //let new_name: String::from_utf8(&source[5..].try_into());
+}
+
+///////////////////////////////////////////////
+// NewClient
+///////////////////////////////////////////////
+
+pub struct NewClientPacket {
     pub chat_name: String,
 }
 
-impl HelloPacket {
-    //pub fn as_bytes(self) -> [u8;69] {
+impl NewClientPacket {
     pub fn as_bytes(self) -> BytesMut {
-        /*let bytes_out = [0 as u8; 69];
-        bytes_out[0] = IrcKind::IRC_KIND_NEW_CLIENT;
-        bytes_out[1..5] = (64 as u32).to_be_bytes()[0..4];
-        bytes_out[6..69] = self.chat_name;*/
-
         let mut bytes_out = BytesMut::with_capacity(69);
         bytes_out.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8);
-            bytes_out.put_u32(64);
-            bytes_out.put_slice(&self.chat_name.as_bytes());
+        bytes_out.put_u32(64);
+        bytes_out.put_slice(&self.chat_name.as_bytes());
+        let remain = 64 - self.chat_name.len(); 
+        for x in 1..remain+1 {
+            bytes_out.put_u8(b'\0');
+        }
         bytes_out
     }
 
-    /*pub fn from_Bytes(source: &mut Bytes ) -> HelloPacket {
-        let kind_raw: IrcKind = FromPrimitive::from_u8(source.get_u8()).unwrap();
-        let length: u32 = source.get_u32();
-        let name = String::from_utf8(source.to_vec()).expect("convertutf8error");
-        HelloPacket {
-          chat_name: name,
+    pub fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
         }
-    }*/
 
-    pub fn from_bytes(source: &[u8] ) -> HelloPacket {
         let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
-        let length: u32 = 64;//source.get_u32();
-        let name = std::str::from_utf8(&source[5..]).expect("convertutf8error");
-        HelloPacket {
-          chat_name: name.try_into().expect("wrongslicelength"),
+        if kind_raw != IrcKind::IRC_KIND_NEW_CLIENT{
+            return Err(IrcError::PacketMismatch());
         }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 64 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_name =  name_from_slice(&source[5..69])?;
+        Ok(NewClientPacket {
+          chat_name: new_name,
+        })
     }
+
     pub fn new(name: & String) -> Result<Self> {
-//        match name.find('\x01') {
- //           Some(_) => Err(fmt::Error),
-            //None => Ok(HelloPacket {
-            //let mut buf = [0u8;64];
-            //let bytesn = name.as_bytes();
-            //let byteslen = bytesn.len();
-            //buf[0..byteslen].copy_from_slice(bytesn);
             let v_name = valid_name(name)?;
-            Ok(HelloPacket {
-                        chat_name: v_name.clone(),
+            Ok(NewClientPacket {
+                        chat_name: v_name.to_owned(),
             })
-  //          })
-       // }
+    }
+
+}
+
+pub struct ErrorPacket {
+    pub error_code: IrcErrCode,
+}
+
+impl ErrorPacket {
+    pub fn as_bytes(self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(69);
+        bytes_out.put_u8( IrcKind::IRC_KIND_ERR as u8);
+        bytes_out.put_u32(1);
+        bytes_out.put_u8(self.error_code as u8);
+        bytes_out
+    }
+
+    pub fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 6 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 6));
+        }
+
+        let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        if kind_raw != IrcKind::IRC_KIND_ERR{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 1 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_error_code: IrcErrCode = FromPrimitive::from_u8(source[5]).unwrap();
+        Ok(ErrorPacket {
+          error_code: new_error_code,
+        })
+    }
+
+    pub fn new(code: IrcErrCode ) -> Result<'static, Self> {
+            Ok(ErrorPacket {
+                        error_code: code.to_owned(),
+            })
     }
 
 }
 
 
-#[test]
-fn test_reject_name_chars() {
-        assert!(valid_name(&"blah".to_string()).is_ok());  //text is ok
+///////////////////////////////////////////////
+// 
+///////////////////////////////////////////////
 
-        //ascii low control chars are not
-        assert!(valid_name(&"bla    h".to_string()).is_err()); //ascii tab is in low control, not ok
-        assert!(valid_name(&"bla\x00h".to_string()).is_err());
-        assert!(valid_name(&"bla\x01h".to_string()).is_err());
-        assert!(valid_name(&"bla\x02h".to_string()).is_err());
-        assert!(valid_name(&"bla\x03h".to_string()).is_err());
-        assert!(valid_name(&"bla\x04h".to_string()).is_err());
-        assert!(valid_name(&"bla\x05h".to_string()).is_err());
-        assert!(valid_name(&"bla\x06h".to_string()).is_err());
-        assert!(valid_name(&"bla\x07h".to_string()).is_err());
-        assert!(valid_name(&"bla\x08h".to_string()).is_err());
-        assert!(valid_name(&"bla\x09h".to_string()).is_err());
-        assert!(valid_name(&"bla\x0Ah".to_string()).is_err());
-        assert!(valid_name(&"bla\x0Bh".to_string()).is_err());
-        assert!(valid_name(&"bla\x0Ch".to_string()).is_err());
-        assert!(valid_name(&"bla\x0Dh".to_string()).is_err());
-        assert!(valid_name(&"bla\x0Eh".to_string()).is_err());
-        assert!(valid_name(&"bla\x0Fh".to_string()).is_err());
-        assert!(valid_name(&"bla\x10h".to_string()).is_err());
-        assert!(valid_name(&"bla\x11h".to_string()).is_err());
-        assert!(valid_name(&"bla\x12h".to_string()).is_err());
-        assert!(valid_name(&"bla\x13h".to_string()).is_err());
-        assert!(valid_name(&"bla\x14h".to_string()).is_err());
-        assert!(valid_name(&"bla\x15h".to_string()).is_err());
-        assert!(valid_name(&"bla\x16h".to_string()).is_err());
-        assert!(valid_name(&"bla\x17h".to_string()).is_err());
-        assert!(valid_name(&"bla\x18h".to_string()).is_err());
-        assert!(valid_name(&"bla\x19h".to_string()).is_err());
-        assert!(valid_name(&"bla\x1Ah".to_string()).is_err());
-        assert!(valid_name(&"bla\x1Bh".to_string()).is_err());
-        assert!(valid_name(&"bla\x1Ch".to_string()).is_err());
-        assert!(valid_name(&"bla\x1Dh".to_string()).is_err());
-        assert!(valid_name(&"bla\x1Eh".to_string()).is_err());
-        assert!(valid_name(&"bla\x1Fh".to_string()).is_err());
-
-
-        //spaces are not ok
-        assert!(valid_name(&"bla h".to_string()).is_err());
-        assert!(valid_name(&"bla\x20h".to_string()).is_err());
-
-        //bidi go byebye
-        assert!(valid_name(&"bla\u{061C}h".to_string()).is_err());
-
-        assert!(valid_name(&"bla\u{200E}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{200F}h".to_string()).is_err());
-
-        assert!(valid_name(&"bla\u{202A}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{202B}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{202C}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{202D}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{202E}h".to_string()).is_err());
-
-        assert!(valid_name(&"bla\u{2066}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{2067}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{2068}h".to_string()).is_err());
-        assert!(valid_name(&"bla\u{2069}h".to_string()).is_err());
-}
-
-#[test]
-fn test_reject_name_length() {
-        assert!(valid_name(&"hunter2".to_string()).is_ok());  //short names are OK
-
-        assert!(valid_name(&"abcdefghijklmnopqrstuvwxyz1234567890".to_string()).is_err()); //long names are not
-
-        assert!(valid_name(&"12345678901234567890123456789012".to_string()).is_ok()); //max length is OK
-        assert!(valid_name(&"123456789012345678901234567890123".to_string()).is_err()); //one more is not
-        assert!(valid_name(&"".to_string()).is_err()); //empty strings are not
-        assert!(valid_name(&"123456789012345678901234567890™™".to_string()).is_ok()); //multibyte unicode count as one and are OK
-        assert!(valid_name(&"123456789012345678901234567890™™™".to_string()).is_err()); //multibyte unicode count as one, but may still push us over the limit.
-
-        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™".to_string()).is_ok()); //63 bytes is OK
-        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™A".to_string()).is_ok()); //64 bytes is OK
-        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™AB".to_string()).is_err()); //65 bytes is not OK
-        assert!(valid_name(&"™™™™™™™™™™™™™™™™™™™™™™".to_string()).is_err()); //66 bytes is not ok
-
-
-}
+#[cfg(test)]
+#[path = "./lib/test.rs"]
+mod libt;
