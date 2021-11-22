@@ -590,6 +590,82 @@ impl IrcPacket for ListRoomsPacket {
 
 }
 
+///////////////////////////////////////////////
+// Room Listing Packet
+///////////////////////////////////////////////
+
+pub struct RoomListingPacket{
+    pub rooms: Vec<String>,
+}
+
+impl RoomListingPacket {
+
+    pub fn new() -> Result<'static, Self> {
+            Ok(RoomListingPacket {
+                rooms: Vec::new()
+                })
+    }
+
+    pub fn from_vec(new_rooms: &Vec<String>) -> Result<'static, Self> {
+            Ok(RoomListingPacket {
+                rooms: new_rooms.to_owned() //takes ownership..?
+                })
+    }
+
+    pub fn push(&mut self, room: &String) {
+        self.rooms.push(room.to_owned());
+    }
+
+
+}
+
+impl IrcPacket for RoomListingPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(69);
+        bytes_out.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
+        bytes_out.put_u32(64 * self.rooms.len() as u32);
+        for room in &self.rooms {
+            bytes_out.put_slice(&room.as_bytes());
+            let remain = 64 - room.len(); 
+            for x in 1..remain+1 {
+                bytes_out.put_u8(b'\0');
+            }
+        }
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_ROOM_LISTING {
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        let count_rooms: usize = (length / 64) as usize;
+
+        if source.len() as usize != (count_rooms*64) + 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
+        }
+
+        if length % 64 != 0 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+
+        let mut new_rooms: Vec<String> = Vec::new();
+
+        for offset in 0..count_rooms {
+            let new_roomname =  name_from_slice(&source[(offset*64)+5..((offset+1)*64)+5])?;
+            new_rooms.push(new_roomname);
+        }
+
+        Ok(RoomListingPacket {
+          rooms: new_rooms,
+        })
+    }
+}
+
 
 #[cfg(test)]
 #[path = "./lib/test.rs"]

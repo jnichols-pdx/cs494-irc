@@ -612,3 +612,125 @@ fn list_rooms_packet_as_bytes() {
     let lrp = ListRoomsPacket::new().unwrap();
     assert_eq!(lrp.as_bytes(), Bytes::from_static(b"\x06\0\0\0\0"));
 }
+
+///////////////////////////////////////////////
+//  Room Listing Packet
+///////////////////////////////////////////////
+
+#[test]
+fn room_listing_packet_from_bytes() {
+    let mut bytes_good1 = BytesMut::with_capacity(69);
+    bytes_good1.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
+    bytes_good1.put_u32(64);
+    bytes_good1.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len();
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_good1.put_u8(b'\0');
+    }
+
+    let rlp_good1 = RoomListingPacket::from_bytes(&bytes_good1);
+    assert!(rlp_good1.is_ok());
+
+    let mut bytes_good3 = BytesMut::with_capacity(69);
+    bytes_good3.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
+    bytes_good3.put_u32(64*3);
+    bytes_good3.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len();
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_good3.put_u8(b'\0');
+    }
+    bytes_good3.put_slice("Lobby".as_bytes());
+    let remain = 64 - "Lobby".len();
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_good3.put_u8(b'\0');
+    }
+    bytes_good3.put_slice("Just_Chatting".as_bytes());
+    let remain = 64 - "Just_Chatting".len();
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_good3.put_u8(b'\0');
+    }
+
+    let rlp_good3 = RoomListingPacket::from_bytes(&bytes_good3);
+    assert!(rlp_good3.is_ok());
+    let rlp3 = rlp_good3.unwrap();
+    assert_eq!(rlp3.rooms[0], "Bob'sroom".to_string());
+    assert_eq!(rlp3.rooms[1], "Lobby".to_string());
+    assert_eq!(rlp3.rooms[2], "Just_Chatting".to_string());
+
+    let mut bytes_short = BytesMut::with_capacity(69);
+    bytes_short.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
+    bytes_short.put_u32(64);
+    bytes_short.put_slice("Bob'sroom".as_bytes());
+    let remain = 60 - "Bob'sroom".len(); //TOO SHORT
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_short.put_u8(b'\0');
+    }
+
+    let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_short);
+    assert!(rlp_bad_short.is_err());
+    if let Err(e) = rlp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(65,69) => true, _ => false });
+    };
+
+
+    let mut bytes_lenf= BytesMut::with_capacity(69);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len(); 
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_lenf.put_u8(b'\0');
+    }
+
+    let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_lenf);
+    assert!(rlp_bad_short.is_err());
+    if let Err(e) = rlp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,_) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(69);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(64); 
+    bytes_mismatch.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len(); 
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_mismatch.put_u8(b'\0');
+    }
+
+    let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_mismatch);
+    assert!(rlp_bad_short.is_err());
+    if let Err(e) = rlp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn room_listing_packet_as_bytes() {
+    let mut rlp = RoomListingPacket::new().unwrap();
+    rlp.push(&"ExampleName".to_string());
+    assert_eq!(rlp.as_bytes(), Bytes::from_static(b"\x07\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+
+    rlp.push(&"SecondName".to_string());
+    assert_eq!(rlp.as_bytes(), Bytes::from_static(b"\x07\0\0\0\x80ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0SecondName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+
+    let mut rooms_vec: Vec<String> = Vec::new();
+    rooms_vec.push("first".to_string());
+    rooms_vec.push("second".to_string());
+    rooms_vec.push("third".to_string());
+    let mut rlpfv = RoomListingPacket::from_vec(&rooms_vec).unwrap();
+
+    assert_eq!(rlpfv.as_bytes(), Bytes::from_static(b"\x07\0\0\0\xC0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+}
