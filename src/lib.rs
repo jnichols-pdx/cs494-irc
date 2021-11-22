@@ -435,6 +435,118 @@ impl IrcPacket for HeartbeatPacket {
 
 }
 
+///////////////////////////////////////////////
+// Enter room packet
+///////////////////////////////////////////////
+
+pub struct EnterRoomPacket {
+    pub room_name: String,
+}
+
+impl EnterRoomPacket {
+
+    pub fn new(roomname: & String) -> Result<Self> {
+            let v_roomname = valid_name(roomname)?;
+            Ok(EnterRoomPacket {
+                        room_name: v_roomname.to_owned(),
+            })
+    }
+
+}
+
+impl IrcPacket for EnterRoomPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(69);
+        bytes_out.put_u8( IrcKind::IRC_KIND_ENTER_ROOM as u8);
+        bytes_out.put_u32(64);
+        bytes_out.put_slice(&self.room_name.as_bytes());
+        let remain = 64 - self.room_name.len(); 
+        for x in 1..remain+1 {
+            bytes_out.put_u8(b'\0');
+        }
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
+        }
+
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_ENTER_ROOM{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 64 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_roomname =  name_from_slice(&source[5..69])?;
+        Ok(EnterRoomPacket {
+          room_name: new_roomname,
+        })
+    }
+}
+
+///////////////////////////////////////////////
+// Leave room packet
+///////////////////////////////////////////////
+
+pub struct LeaveRoomPacket {
+    pub room_name: String,
+}
+
+impl LeaveRoomPacket {
+
+    pub fn new(roomname: & String) -> Result<Self> {
+            let v_roomname = valid_name(roomname)?;
+            Ok(LeaveRoomPacket {
+                        room_name: v_roomname.to_owned(),
+            })
+    }
+
+}
+
+impl IrcPacket for LeaveRoomPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(69);
+        bytes_out.put_u8( IrcKind::IRC_KIND_LEAVE_ROOM as u8);
+        bytes_out.put_u32(64);
+        bytes_out.put_slice(&self.room_name.as_bytes());
+        let remain = 64 - self.room_name.len(); 
+        for x in 1..remain+1 {
+            bytes_out.put_u8(b'\0');
+        }
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
+        }
+
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_LEAVE_ROOM{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 64 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_roomname =  name_from_slice(&source[5..69])?;
+        Ok(LeaveRoomPacket {
+          room_name: new_roomname,
+        })
+    }
+}
+
+
+
 #[cfg(test)]
 #[path = "./lib/test.rs"]
 mod irclib;

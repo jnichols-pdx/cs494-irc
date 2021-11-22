@@ -239,6 +239,9 @@ fn message_length() {
 
 }
 
+///////////////////////////////////////////////
+//  New Client Packet
+///////////////////////////////////////////////
 
 #[test]
 fn new_client_packet_from_bytes() {
@@ -325,6 +328,9 @@ fn new_client_packet_as_bytes() {
     assert_eq!(ncp.as_bytes(), Bytes::from_static(b"\x02\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
 
+///////////////////////////////////////////////
+//  Hearbeat Packet
+///////////////////////////////////////////////
 
 #[test]
 fn heartbeat_packet_from_bytes() {
@@ -358,6 +364,10 @@ fn heartbeat_packet_as_bytes() {
     let hbp = HeartbeatPacket::new().unwrap();
     assert_eq!(hbp.as_bytes(), Bytes::from_static(b"\x03\0\0\0\0"));
 }
+
+///////////////////////////////////////////////
+//  Error Packet
+///////////////////////////////////////////////
 
 
 #[test]
@@ -402,5 +412,167 @@ fn error_packet_from_bytes() {
 fn error_packet_as_bytes() {
     let erp = ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE).unwrap();
     assert_eq!(erp.as_bytes(), Bytes::from_static(b"\x01\0\0\0\x01\x04"));
+}
+
+///////////////////////////////////////////////
+//  Enter Room Packet
+///////////////////////////////////////////////
+
+#[test]
+fn enter_room_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(69);
+    bytes_good.put_u8( IrcKind::IRC_KIND_ENTER_ROOM as u8);
+    bytes_good.put_u32(64);
+    bytes_good.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len();
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_good.put_u8(b'\0');
+    }
+
+    let erp_good = EnterRoomPacket::from_bytes(&bytes_good);
+    assert!(erp_good.is_ok());
+
+    let mut bytes_short = BytesMut::with_capacity(69);
+    bytes_short.put_u8( IrcKind::IRC_KIND_ENTER_ROOM as u8);
+    bytes_short.put_u32(64);
+    bytes_short.put_slice("Bob'sroom".as_bytes());
+    let remain = 60 - "Bob'sroom".len(); //TOO SHORT
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_short.put_u8(b'\0');
+    }
+
+    let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_short);
+    assert!(erp_bad_short.is_err());
+    if let Err(e) = erp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(65,69) => true, _ => false });
+    };
+
+
+    let mut bytes_lenf= BytesMut::with_capacity(69);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_ENTER_ROOM as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len(); 
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_lenf.put_u8(b'\0');
+    }
+
+    let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_lenf);
+    assert!(erp_bad_short.is_err());
+    if let Err(e) = erp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(69);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(64); 
+    bytes_mismatch.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len(); 
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_mismatch.put_u8(b'\0');
+    }
+
+    let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_mismatch);
+    assert!(erp_bad_short.is_err());
+    if let Err(e) = erp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn enter_room_packet_as_bytes() {
+    let erp = EnterRoomPacket::new(&"ExampleName".to_string()).unwrap();
+    assert_eq!(erp.as_bytes(), Bytes::from_static(b"\x04\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+}
+
+///////////////////////////////////////////////
+//  Leave Room Packet
+///////////////////////////////////////////////
+
+#[test]
+fn leave_room_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(69);
+    bytes_good.put_u8( IrcKind::IRC_KIND_LEAVE_ROOM as u8);
+    bytes_good.put_u32(64);
+    bytes_good.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len();
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_good.put_u8(b'\0');
+    }
+
+    let lrp_good = LeaveRoomPacket::from_bytes(&bytes_good);
+    assert!(lrp_good.is_ok());
+
+    let mut bytes_short = BytesMut::with_capacity(69);
+    bytes_short.put_u8( IrcKind::IRC_KIND_LEAVE_ROOM as u8);
+    bytes_short.put_u32(64);
+    bytes_short.put_slice("Bob'sroom".as_bytes());
+    let remain = 60 - "Bob'sroom".len(); //TOO SHORT
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_short.put_u8(b'\0');
+    }
+
+    let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_short);
+    assert!(lrp_bad_short.is_err());
+    if let Err(e) = lrp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(65,69) => true, _ => false });
+    };
+
+
+    let mut bytes_lenf= BytesMut::with_capacity(69);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_LEAVE_ROOM as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len(); 
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_lenf.put_u8(b'\0');
+    }
+
+    let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_lenf);
+    assert!(lrp_bad_short.is_err());
+    if let Err(e) = lrp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(69);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(64); 
+    bytes_mismatch.put_slice("Bob'sroom".as_bytes());
+    let remain = 64 - "Bob'sroom".len(); 
+    for x in 1..remain+1 {
+        println!("{}",x);
+        bytes_mismatch.put_u8(b'\0');
+    }
+
+    let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_mismatch);
+    assert!(lrp_bad_short.is_err());
+    if let Err(e) = lrp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn leave_room_packet_as_bytes() {
+    let lrp = LeaveRoomPacket::new(&"ExampleName".to_string()).unwrap();
+    assert_eq!(lrp.as_bytes(), Bytes::from_static(b"\x05\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
 
