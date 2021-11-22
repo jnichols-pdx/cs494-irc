@@ -391,7 +391,7 @@ impl IrcPacket for NewClientPacket {
 
 
 ///////////////////////////////////////////////
-// Heartbeat packet
+// Heartbeat Packet
 ///////////////////////////////////////////////
 
 pub struct HeartbeatPacket {
@@ -436,7 +436,7 @@ impl IrcPacket for HeartbeatPacket {
 }
 
 ///////////////////////////////////////////////
-// Enter room packet
+// Enter Room Packet
 ///////////////////////////////////////////////
 
 pub struct EnterRoomPacket {
@@ -491,7 +491,7 @@ impl IrcPacket for EnterRoomPacket {
 }
 
 ///////////////////////////////////////////////
-// Leave room packet
+// Leave Room Packet
 ///////////////////////////////////////////////
 
 pub struct LeaveRoomPacket {
@@ -545,6 +545,50 @@ impl IrcPacket for LeaveRoomPacket {
     }
 }
 
+///////////////////////////////////////////////
+// List Rooms Packet
+///////////////////////////////////////////////
+
+pub struct ListRoomsPacket {
+}
+
+impl ListRoomsPacket {
+
+    pub fn new() -> Result<'static, Self> {
+            Ok(ListRoomsPacket {})
+    }
+
+}
+
+impl IrcPacket for ListRoomsPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(5);
+        bytes_out.put_u8( IrcKind::IRC_KIND_LIST_ROOMS as u8);
+        bytes_out.put_u32(0);
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
+        }
+
+        //let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_LIST_ROOMS{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 0 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        Ok(ListRoomsPacket {})
+    }
+
+}
 
 
 #[cfg(test)]

@@ -329,7 +329,7 @@ fn new_client_packet_as_bytes() {
 }
 
 ///////////////////////////////////////////////
-//  Hearbeat Packet
+//  Heartbeat Packet
 ///////////////////////////////////////////////
 
 #[test]
@@ -576,3 +576,39 @@ fn leave_room_packet_as_bytes() {
     assert_eq!(lrp.as_bytes(), Bytes::from_static(b"\x05\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
 
+///////////////////////////////////////////////
+//  List Rooms Packet
+///////////////////////////////////////////////
+
+#[test]
+fn list_rooms_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(5);
+    bytes_good.put_u8( IrcKind::IRC_KIND_LIST_ROOMS as u8);
+    bytes_good.put_u32(0);
+
+    let lrp_good = ListRoomsPacket::from_bytes(&bytes_good);
+    assert!(lrp_good.is_ok());
+
+
+    let mut bytes_wrong_length = BytesMut::with_capacity(5);
+    bytes_wrong_length.put_u8( IrcKind::IRC_KIND_LIST_ROOMS as u8);
+    bytes_wrong_length.put_u32(60);
+
+    let lrp_bad_len = ListRoomsPacket::from_bytes(&bytes_wrong_length);
+    assert!(lrp_bad_len.is_err());
+
+
+    let mut bytes_wrong_type = BytesMut::with_capacity(5);
+    bytes_wrong_type.put_u8( IrcKind::IRC_KIND_ERR as u8);
+    bytes_wrong_type.put_u32(0);
+
+    let lrp_bad_type = ListRoomsPacket::from_bytes(&bytes_wrong_type);
+    assert!(lrp_bad_type.is_err());
+
+}
+
+#[test]
+fn list_rooms_packet_as_bytes() {
+    let lrp = ListRoomsPacket::new().unwrap();
+    assert_eq!(lrp.as_bytes(), Bytes::from_static(b"\x06\0\0\0\0"));
+}
