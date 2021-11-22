@@ -250,10 +250,7 @@ fn new_client_packet_from_bytes() {
     bytes_good.put_u32(64);
     bytes_good.put_slice("Bobtato".as_bytes());
     let remain = 64 - "Bobtato".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good.put_u8(b'\0');
-    }
+    bytes_good.put_bytes(b'\0',remain);
 
     let ncp_good = NewClientPacket::from_bytes(&bytes_good);
     assert!(ncp_good.is_ok());
@@ -270,10 +267,7 @@ fn new_client_packet_from_bytes() {
     bytes_short.put_u32(64);
     bytes_short.put_slice("Bobtato".as_bytes());
     let remain = 60 - "Bobtato".len(); //TOO SHORT
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_short.put_u8(b'\0');
-    }
+    bytes_short.put_bytes(b'\0',remain);
 
     let ncp_bad_short = NewClientPacket::from_bytes(&bytes_short);
     assert!(ncp_bad_short.is_err());
@@ -289,10 +283,7 @@ fn new_client_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("Bobtato".as_bytes());
     let remain = 64 - "Bobtato".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_lenf.put_u8(b'\0');
-    }
+    bytes_lenf.put_bytes(b'\0',remain);
 
     let ncp_bad_short = NewClientPacket::from_bytes(&bytes_lenf);
     assert!(ncp_bad_short.is_err());
@@ -307,10 +298,7 @@ fn new_client_packet_from_bytes() {
     bytes_mismatch.put_u32(64); 
     bytes_mismatch.put_slice("Bobtato".as_bytes());
     let remain = 64 - "Bobtato".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_mismatch.put_u8(b'\0');
-    }
+    bytes_mismatch.put_bytes(b'\0',remain);
 
     let ncp_bad_short = NewClientPacket::from_bytes(&bytes_mismatch);
     assert!(ncp_bad_short.is_err());
@@ -425,10 +413,7 @@ fn enter_room_packet_from_bytes() {
     bytes_good.put_u32(64);
     bytes_good.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good.put_u8(b'\0');
-    }
+    bytes_good.put_bytes(b'\0',remain);
 
     let erp_good = EnterRoomPacket::from_bytes(&bytes_good);
     assert!(erp_good.is_ok());
@@ -438,10 +423,7 @@ fn enter_room_packet_from_bytes() {
     bytes_short.put_u32(64);
     bytes_short.put_slice("Bob'sroom".as_bytes());
     let remain = 60 - "Bob'sroom".len(); //TOO SHORT
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_short.put_u8(b'\0');
-    }
+    bytes_short.put_bytes(b'\0',remain);
 
     let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_short);
     assert!(erp_bad_short.is_err());
@@ -457,10 +439,7 @@ fn enter_room_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_lenf.put_u8(b'\0');
-    }
+    bytes_lenf.put_bytes(b'\0',remain);
 
     let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_lenf);
     assert!(erp_bad_short.is_err());
@@ -472,13 +451,10 @@ fn enter_room_packet_from_bytes() {
 
     let mut bytes_mismatch= BytesMut::with_capacity(69);
     bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
-    bytes_mismatch.put_u32(64); 
+    bytes_mismatch.put_u32(64);
     bytes_mismatch.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_mismatch.put_u8(b'\0');
-    }
+    bytes_mismatch.put_bytes(b'\0',remain);
 
     let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_mismatch);
     assert!(erp_bad_short.is_err());
@@ -506,10 +482,7 @@ fn leave_room_packet_from_bytes() {
     bytes_good.put_u32(64);
     bytes_good.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good.put_u8(b'\0');
-    }
+    bytes_good.put_bytes(b'\0',remain);
 
     let lrp_good = LeaveRoomPacket::from_bytes(&bytes_good);
     assert!(lrp_good.is_ok());
@@ -519,10 +492,7 @@ fn leave_room_packet_from_bytes() {
     bytes_short.put_u32(64);
     bytes_short.put_slice("Bob'sroom".as_bytes());
     let remain = 60 - "Bob'sroom".len(); //TOO SHORT
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_short.put_u8(b'\0');
-    }
+    bytes_short.put_bytes(b'\0',remain);
 
     let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_short);
     assert!(lrp_bad_short.is_err());
@@ -538,10 +508,7 @@ fn leave_room_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_lenf.put_u8(b'\0');
-    }
+    bytes_lenf.put_bytes(b'\0',remain);
 
     let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_lenf);
     assert!(lrp_bad_short.is_err());
@@ -553,13 +520,10 @@ fn leave_room_packet_from_bytes() {
 
     let mut bytes_mismatch= BytesMut::with_capacity(69);
     bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
-    bytes_mismatch.put_u32(64); 
+    bytes_mismatch.put_u32(64);
     bytes_mismatch.put_slice("Bob'sroom".as_bytes());
-    let remain = 64 - "Bob'sroom".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_mismatch.put_u8(b'\0');
-    }
+    let remain = 64 - "Bob'sroom".len();
+    bytes_mismatch.put_bytes(b'\0',remain);
 
     let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_mismatch);
     assert!(lrp_bad_short.is_err());
@@ -619,40 +583,33 @@ fn list_rooms_packet_as_bytes() {
 
 #[test]
 fn room_listing_packet_from_bytes() {
-    let mut bytes_good1 = BytesMut::with_capacity(69);
+    let mut bytes_good1 = BytesMut::with_capacity(133);
     bytes_good1.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
-    bytes_good1.put_u32(64);
+    bytes_good1.put_u32(64*2);
+    bytes_good1.put_bytes(b'\0',64);
     bytes_good1.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good1.put_u8(b'\0');
-    }
+    bytes_good1.put_bytes(b'\0',remain);
 
     let rlp_good1 = RoomListingPacket::from_bytes(&bytes_good1);
     assert!(rlp_good1.is_ok());
 
-    let mut bytes_good3 = BytesMut::with_capacity(69);
+    let mut bytes_good3 = BytesMut::with_capacity(261);
     bytes_good3.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
-    bytes_good3.put_u32(64*3);
+    bytes_good3.put_u32(64*4);
+    bytes_good3.put_bytes(b'\0',64);
+
     bytes_good3.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good3.put_u8(b'\0');
-    }
+    bytes_good3.put_bytes(b'\0',remain);
+
     bytes_good3.put_slice("Lobby".as_bytes());
     let remain = 64 - "Lobby".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good3.put_u8(b'\0');
-    }
+    bytes_good3.put_bytes(b'\0',remain);
+
     bytes_good3.put_slice("Just_Chatting".as_bytes());
     let remain = 64 - "Just_Chatting".len();
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_good3.put_u8(b'\0');
-    }
+    bytes_good3.put_bytes(b'\0',remain);
 
     let rlp_good3 = RoomListingPacket::from_bytes(&bytes_good3);
     assert!(rlp_good3.is_ok());
@@ -661,34 +618,30 @@ fn room_listing_packet_from_bytes() {
     assert_eq!(rlp3.rooms[1], "Lobby".to_string());
     assert_eq!(rlp3.rooms[2], "Just_Chatting".to_string());
 
-    let mut bytes_short = BytesMut::with_capacity(69);
+    let mut bytes_short = BytesMut::with_capacity(133);
     bytes_short.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
-    bytes_short.put_u32(64);
+    bytes_short.put_u32(128);
+    bytes_short.put_bytes(b'\0',64);
     bytes_short.put_slice("Bob'sroom".as_bytes());
     let remain = 60 - "Bob'sroom".len(); //TOO SHORT
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_short.put_u8(b'\0');
-    }
+    bytes_short.put_bytes(b'\0',remain);
 
     let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_short);
     assert!(rlp_bad_short.is_err());
     if let Err(e) = rlp_bad_short {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
-        assert!(match e { IrcError::PacketLengthIncorrect(65,69) => true, _ => false });
+        assert!(match e { IrcError::PacketLengthIncorrect(_,133) => true, _ => false });
     };
 
 
-    let mut bytes_lenf= BytesMut::with_capacity(69);
+    let mut bytes_lenf= BytesMut::with_capacity(133);
     bytes_lenf.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
     bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_bytes(b'\0',64);
     bytes_lenf.put_slice("Bob'sroom".as_bytes());
     let remain = 64 - "Bob'sroom".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_lenf.put_u8(b'\0');
-    }
+    bytes_lenf.put_bytes(b'\0',remain);
 
     let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_lenf);
     assert!(rlp_bad_short.is_err());
@@ -698,15 +651,13 @@ fn room_listing_packet_from_bytes() {
         assert!(match e {IrcError::PacketLengthIncorrect(_,_) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
     };
 
-    let mut bytes_mismatch= BytesMut::with_capacity(69);
+    let mut bytes_mismatch= BytesMut::with_capacity(133);
     bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
-    bytes_mismatch.put_u32(64); 
+    bytes_mismatch.put_u32(128); 
+    bytes_mismatch.put_bytes(b'\0',64);
     bytes_mismatch.put_slice("Bob'sroom".as_bytes());
-    let remain = 64 - "Bob'sroom".len(); 
-    for x in 1..remain+1 {
-        println!("{}",x);
-        bytes_mismatch.put_u8(b'\0');
-    }
+    let remain = 64 - "Bob'sroom".len();
+    bytes_mismatch.put_bytes(b'\0',remain);
 
     let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_mismatch);
     assert!(rlp_bad_short.is_err());
@@ -718,13 +669,25 @@ fn room_listing_packet_from_bytes() {
 }
 
 #[test]
+fn room_listing_push_room() {
+    let mut rlp = RoomListingPacket::new().unwrap();
+    assert_eq!(rlp.rooms.len(), 0);
+
+    assert!(rlp.push(&"ExampleName".to_string()).is_ok());
+    assert_eq!(rlp.rooms.len(), 1);
+
+    assert!(rlp.push(&"Exam\x09pleName".to_string()).is_err());
+    assert_eq!(rlp.rooms.len(), 1);
+}
+
+#[test]
 fn room_listing_packet_as_bytes() {
     let mut rlp = RoomListingPacket::new().unwrap();
-    rlp.push(&"ExampleName".to_string());
-    assert_eq!(rlp.as_bytes(), Bytes::from_static(b"\x07\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+    assert!(rlp.push(&"ExampleName".to_string()).is_ok());
+    assert_eq!(rlp.as_bytes(), Bytes::from_static(b"\x07\0\0\0\x80\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 
-    rlp.push(&"SecondName".to_string());
-    assert_eq!(rlp.as_bytes(), Bytes::from_static(b"\x07\0\0\0\x80ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0SecondName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+    assert!(rlp.push(&"SecondName".to_string()).is_ok());
+    assert_eq!(rlp.as_bytes(), Bytes::from_static(b"\x07\0\0\0\xC0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0SecondName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 
     let mut rooms_vec: Vec<String> = Vec::new();
     rooms_vec.push("first".to_string());
@@ -732,5 +695,143 @@ fn room_listing_packet_as_bytes() {
     rooms_vec.push("third".to_string());
     let mut rlpfv = RoomListingPacket::from_vec(&rooms_vec).unwrap();
 
-    assert_eq!(rlpfv.as_bytes(), Bytes::from_static(b"\x07\0\0\0\xC0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+    assert_eq!(rlpfv.as_bytes(), Bytes::from_static(b"\x07\0\0\x01\x00\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+}
+
+///////////////////////////////////////////////
+//  User Listing Packet
+///////////////////////////////////////////////
+
+#[test]
+fn user_listing_packet_from_bytes() {
+    let mut bytes_good1 = BytesMut::with_capacity(133);
+    bytes_good1.put_u8( IrcKind::IRC_KIND_USER_LISTING as u8);
+    bytes_good1.put_u32(128);
+
+    //room identifier
+    bytes_good1.put_slice("Lobby".as_bytes());
+    let remain = 64 - "Lobby".len();
+    bytes_good1.put_bytes(b'\0', remain);
+
+    //first user
+    bytes_good1.put_slice("Bob'suser".as_bytes());
+    let remain = 64 - "Bob'suser".len();
+    bytes_good1.put_bytes(b'\0', remain);
+
+    let ulp_good1 = UserListingPacket::from_bytes(&bytes_good1);
+    assert!(ulp_good1.is_ok());
+
+    let mut bytes_good3 = BytesMut::with_capacity(261);
+    bytes_good3.put_u8( IrcKind::IRC_KIND_USER_LISTING as u8);
+    bytes_good3.put_u32(64*4);
+
+    bytes_good3.put_slice("Just_Chatting".as_bytes());
+    let remain = 64 - "Just_Chatting".len();
+    bytes_good3.put_bytes(b'\0', remain);
+
+    bytes_good3.put_slice("Franklin".as_bytes());
+    let remain = 64 - "Franklin".len();
+    bytes_good3.put_bytes(b'\0', remain);
+
+    bytes_good3.put_slice("Thomas".as_bytes());
+    let remain = 64 - "Thomas".len();
+    bytes_good3.put_bytes(b'\0', remain);
+
+    bytes_good3.put_slice("JohnJonaJameson".as_bytes());
+    let remain = 64 - "JohnJonaJameson".len();
+    bytes_good3.put_bytes(b'\0', remain);
+
+    let ulp_good3 = UserListingPacket::from_bytes(&bytes_good3);
+    assert!(ulp_good3.is_ok());
+    let ulp3 = ulp_good3.unwrap();
+    assert_eq!(ulp3.room, "Just_Chatting".to_string());
+    assert_eq!(ulp3.users[0], "Franklin".to_string());
+    assert_eq!(ulp3.users[1], "Thomas".to_string());
+    assert_eq!(ulp3.users[2], "JohnJonaJameson".to_string());
+
+    let mut bytes_short = BytesMut::with_capacity(133);
+    bytes_short.put_u8( IrcKind::IRC_KIND_USER_LISTING as u8);
+    bytes_short.put_u32(128);
+    bytes_good3.put_slice("OtherRoom".as_bytes());
+    let remain = 64 - "OtherRoom".len();
+    bytes_good3.put_bytes(b'\0', remain);
+    bytes_short.put_slice("Franklin".as_bytes());
+    let remain = 60 - "Franklin".len(); //TOO SHORT
+    bytes_good3.put_bytes(b'\0', remain);
+
+    let ulp_bad_short = UserListingPacket::from_bytes(&bytes_short);
+    assert!(ulp_bad_short.is_err());
+    if let Err(e) = ulp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,133) => true, _ => false });
+    };
+
+
+    let mut bytes_lenf= BytesMut::with_capacity(133);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_USER_LISTING as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("OtherRoom".as_bytes());
+    let remain = 64 - "OtherRoom".len();
+    bytes_lenf.put_bytes(b'\0', remain);
+    bytes_lenf.put_slice("Franklin".as_bytes());
+    let remain = 64 - "Franklin".len();
+    bytes_lenf.put_bytes(b'\0',64);
+
+    let ulp_bad_short = UserListingPacket::from_bytes(&bytes_lenf);
+    assert!(ulp_bad_short.is_err());
+    if let Err(e) = ulp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,_) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(133);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(128);
+    bytes_good3.put_slice("OtherRoom".as_bytes());
+    let remain = 64 - "OtherRoom".len();
+    bytes_good3.put_bytes(b'\0', remain);
+    bytes_mismatch.put_slice("Franklin".as_bytes());
+    let remain = 64 - "Franklin".len();
+    bytes_mismatch.put_bytes(b'\0',64);
+
+    let ulp_bad_short = UserListingPacket::from_bytes(&bytes_mismatch);
+    assert!(ulp_bad_short.is_err());
+    if let Err(e) = ulp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn user_listing_push_user() {
+    let mut ulp = UserListingPacket::new().unwrap();
+    assert_eq!(ulp.users.len(), 0);
+
+    assert!(ulp.push(&"ExampleName".to_string()).is_ok());
+    assert_eq!(ulp.users.len(), 1);
+
+    assert!(ulp.push(&"Exam\x09pleName".to_string()).is_err());
+    assert_eq!(ulp.users.len(), 1);
+}
+
+#[test]
+fn user_listing_packet_as_bytes() {
+    let mut ulp = UserListingPacket::new().unwrap();
+    assert!(ulp.set_room(&"Channel54".to_string()).is_ok());
+    assert!(ulp.push(&"ExampleName".to_string()).is_ok());
+    assert_eq!(ulp.as_bytes(), Bytes::from_static(b"\x08\0\0\0\x80Channel54\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+
+    assert!(ulp.push(&"SecondName".to_string()).is_ok());
+    assert_eq!(ulp.as_bytes(), Bytes::from_static(b"\x08\0\0\0\xC0Channel54\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0SecondName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+
+    let mut users_vec: Vec<String> = Vec::new();
+    users_vec.push("first".to_string());
+    users_vec.push("second".to_string());
+    users_vec.push("third".to_string());
+    let mut ulpfv = UserListingPacket::from_room_and_vec(&"r/IRC".to_string(), &users_vec).unwrap();
+
+    assert_eq!(ulpfv.as_bytes(), Bytes::from_static(b"\x08\0\0\x01\x00r/IRC\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }

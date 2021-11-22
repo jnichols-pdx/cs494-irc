@@ -86,7 +86,7 @@ pub enum IrcError {
     #[error("Filename Too Long: {0} codepoints")]
     FilenameTooLong(usize),
 
-    #[error("Packet size invalid, expecte {0} found {1}")]
+    #[error("Packet size invalid, found {0} expected {1}")]
     PacketLengthIncorrect(usize, usize),
 
     #[error("Field size invalid")]
@@ -381,7 +381,7 @@ impl IrcPacket for NewClientPacket {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
-        let new_name =  name_from_slice(&source[5..69])?;
+        let new_name =  valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
         Ok(NewClientPacket {
           chat_name: new_name,
         })
@@ -483,7 +483,7 @@ impl IrcPacket for EnterRoomPacket {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
-        let new_roomname =  name_from_slice(&source[5..69])?;
+        let new_roomname =  valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
         Ok(EnterRoomPacket {
           room_name: new_roomname,
         })
@@ -538,7 +538,7 @@ impl IrcPacket for LeaveRoomPacket {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
-        let new_roomname =  name_from_slice(&source[5..69])?;
+        let new_roomname =  valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
         Ok(LeaveRoomPacket {
           room_name: new_roomname,
         })
@@ -612,8 +612,10 @@ impl RoomListingPacket {
                 })
     }
 
-    pub fn push(&mut self, room: &String) {
-        self.rooms.push(room.to_owned());
+    pub fn push(&mut self, room: &String) -> Result<()> {
+        let a_room = valid_name(&room)?.to_owned();
+        self.rooms.push(a_room);
+        Ok(())
     }
 
 
@@ -622,15 +624,17 @@ impl RoomListingPacket {
 impl IrcPacket for RoomListingPacket {
 
     fn as_bytes(&self) -> BytesMut {
-        let mut bytes_out = BytesMut::with_capacity(69);
+        let mut bytes_out = BytesMut::with_capacity(133);
         bytes_out.put_u8( IrcKind::IRC_KIND_ROOM_LISTING as u8);
-        bytes_out.put_u32(64 * self.rooms.len() as u32);
+        bytes_out.put_u32(64 + (64 * self.rooms.len()) as u32);
+        bytes_out.put_bytes(b'\0', 64);
         for room in &self.rooms {
             bytes_out.put_slice(&room.as_bytes());
             let remain = 64 - room.len(); 
-            for x in 1..remain+1 {
+            bytes_out.put_bytes(b'\0', remain);
+            /*for x in 1..remain+1 {
                 bytes_out.put_u8(b'\0');
-            }
+            }*/
         }
         bytes_out
     }
@@ -642,21 +646,26 @@ impl IrcPacket for RoomListingPacket {
         }
 
         let length = u32_from_slice(&source[1..5]);
-        let count_rooms: usize = (length / 64) as usize;
 
-        if source.len() as usize != (count_rooms*64) + 5 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
+        if length < 128 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let count_rooms: usize = ((length / 64)-1) as usize;
+
+        if source.len() as usize != (count_rooms*64) + 5 + 64{
+            return Err(IrcError::PacketLengthIncorrect(source.len(), (count_rooms*64) +5 + 64));
         }
 
         if length % 64 != 0 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
-
+        //Ignores bytes 5..69 which are the unused identifier field.
         let mut new_rooms: Vec<String> = Vec::new();
 
         for offset in 0..count_rooms {
-            let new_roomname =  name_from_slice(&source[(offset*64)+5..((offset+1)*64)+5])?;
+            let new_roomname =  valid_name(&name_from_slice(&source[(offset*64)+5+64..((offset+1)*64)+5+64])?)?.to_owned();
             new_rooms.push(new_roomname);
         }
 
@@ -666,6 +675,181 @@ impl IrcPacket for RoomListingPacket {
     }
 }
 
+///////////////////////////////////////////////
+// User Listing Packet
+///////////////////////////////////////////////
+
+pub struct UserListingPacket{
+    pub room: String,
+    pub users: Vec<String>,
+}
+
+impl UserListingPacket {
+
+    pub fn new() -> Result<'static, Self> {
+            Ok(UserListingPacket {
+                users: Vec::new(),
+                room: "Unknown".to_string(),
+                })
+    }
+
+    pub fn from_room_and_vec(new_room: &String, new_users: &Vec<String>) -> Result<'static, Self> {
+            Ok(UserListingPacket {
+                users: new_users.to_owned(),
+                room: new_room.to_owned(),
+                })
+    }
+
+    pub fn push(&mut self, user: &String) -> Result<()> {
+        let a_user = valid_name(&user)?.to_owned();
+        self.users.push(a_user.to_owned());
+        Ok(())
+    }
+
+    pub fn set_room(&mut self, new_room: &String) -> Result<()> {
+        let a_room = valid_name(&new_room)?.to_owned();
+        self.room = new_room.to_owned();
+        Ok(())
+    }
+
+
+}
+
+impl IrcPacket for UserListingPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(133);
+        bytes_out.put_u8( IrcKind::IRC_KIND_USER_LISTING as u8);
+        bytes_out.put_u32(64 + (64 * self.users.len()) as u32);
+
+        bytes_out.put_slice(&self.room.as_bytes());
+        let remain = 64 - self.room.len();
+        bytes_out.put_bytes(b'\0', remain);
+        for user in &self.users{
+            bytes_out.put_slice(&user.as_bytes());
+            let remain = 64 - user.len();
+            for x in 1..remain+1 {
+                bytes_out.put_u8(b'\0');
+            }
+        }
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_USER_LISTING {
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+
+        if length < 128 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let count_users: usize = ((length / 64) - 1) as usize;
+
+        println!("blah{}", count_users);
+        if source.len() as usize != 5 + 64 + (count_users*64) {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 5 + 64 + (count_users*64)));
+        }
+
+        if length % 64 != 0 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_room: String = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
+        let mut new_users: Vec<String> = Vec::new();
+
+        for offset in 0..count_users {
+            let new_username =  valid_name(&name_from_slice(&source[(offset*64)+5+64..((offset+1)*64)+5+64])?)?.to_owned();
+            new_users.push(new_username);
+        }
+
+        Ok(UserListingPacket {
+          users: new_users,
+          room: new_room,
+        })
+    }
+}
+
+
+///////////////////////////////////////////////
+// Query User Packet
+///////////////////////////////////////////////
+
+    #[allow(non_camel_case_types)]
+    #[derive(Copy,Clone,FromPrimitive,PartialEq)]
+    #[repr(u8)]
+    pub enum UserStatus {
+        Online = 0x01,
+        Offline = 0x00,
+        Request = 0x02,
+
+        #[num_enum(default)]
+        NO_MATCH_USER_STATUS,
+    }
+
+pub struct QueryUserPacket {
+
+    pub user_name: String,
+    pub status: UserStatus,
+}
+
+impl QueryUserPacket {
+
+    pub fn new(username: & String) -> Result<Self> {
+            let v_username = valid_name(username)?;
+            Ok(QueryUserPacket {
+                        user_name: v_username.to_owned(),
+                        status: UserStatus::Request,
+            })
+    }
+
+}
+
+impl IrcPacket for QueryUserPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(70);
+        bytes_out.put_u8( IrcKind::IRC_KIND_QUERY_USER as u8);
+        bytes_out.put_u32(64);
+        bytes_out.put_slice(&self.user_name.as_bytes());
+        let remain = 64 - self.user_name.len();
+        for x in 1..remain+1 {
+            bytes_out.put_u8(b'\0');
+        }
+        bytes_out.put_u8( self.status as u8);
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
+        }
+
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_QUERY_USER{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 64 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_username =  valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
+
+        let new_user_status: UserStatus = UserStatus::from(source[5]);
+        match new_user_status {
+            UserStatus::NO_MATCH_USER_STATUS => Err(IrcError::CodeOutOfRange()),
+            user_status=> Ok(QueryUserPacket {
+                            user_name: new_username,
+                            status: user_status,
+                            })
+        }
+    }
+}
 
 #[cfg(test)]
 #[path = "./lib/test.rs"]
