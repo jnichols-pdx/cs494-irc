@@ -4,6 +4,7 @@
 
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use num_enum::FromPrimitive;
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 use std::convert::{TryInto, TryFrom};
 use thiserror::Error;
@@ -42,6 +43,7 @@ pub enum IrcKind {
 #[allow(non_camel_case_types)]
 //#[allow(dead_code)]
 #[derive(Copy,Clone,FromPrimitive,PartialEq)]
+#[repr(u8)]
 pub enum IrcErrCode {
     IRC_ERR_UNKNOWN = 0x01,
     IRC_ERR_ILLEGAL_KIND = 0x02,
@@ -52,6 +54,9 @@ pub enum IrcErrCode {
     IRC_ERR_ILLEGAL_TRANSFER = 0x07,
     IRC_ERR_TOO_MANY_USERS = 0x08,
     IRC_ERR_TOO_MANY_ROOMS = 0x09,
+
+    #[num_enum(default)]
+    NO_MATCH_IRC_ERR,
 }
 
 //Internal Rust errors, NOT necessarily equivalent to the IRC_ERR_* values contained in an
@@ -98,6 +103,9 @@ pub enum IrcError {
 
     #[error("Encountered UTF8 Error: {0}")]
     Utf8Err(std::str::Utf8Error),
+
+    #[error("Code out of range")]
+    CodeOutOfRange(),
 }
 
 impl From<io::Error> for IrcError {
@@ -264,8 +272,65 @@ pub fn string_from_slice(source: &[u8]) -> Result<String> {
         //let new_name: String::from_utf8(&source[5..].try_into());
 }
 
+pub trait IrcPacket {
+    fn as_bytes(&self) -> BytesMut;
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> where Self: Sized;
+
+}
+
 ///////////////////////////////////////////////
-// NewClient
+//  Error Packet
+///////////////////////////////////////////////
+
+pub struct ErrorPacket {
+    pub error_code: IrcErrCode,
+}
+
+impl ErrorPacket {
+
+    pub fn new(code: IrcErrCode ) -> Result<'static, Self> {
+            Ok(ErrorPacket {
+                        error_code: code.to_owned(),
+            })
+    }
+
+}
+
+impl IrcPacket for ErrorPacket {
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(69);
+        bytes_out.put_u8( IrcKind::IRC_KIND_ERR as u8);
+        bytes_out.put_u32(1);
+        bytes_out.put_u8(self.error_code as u8);
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 6 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 6));
+        }
+
+        let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        if kind_raw != IrcKind::IRC_KIND_ERR{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length = u32_from_slice(&source[1..5]);
+        if length != 1 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        let new_error_code = IrcErrCode::from(source[5]);
+        match new_error_code {
+            NO_MATCH_IRC_ERR => Err(IrcError::CodeOutOfRange()),
+            code => Ok(ErrorPacket { error_code: code, }),
+        }
+    }
+}
+
+///////////////////////////////////////////////
+// NewClient Packet
 ///////////////////////////////////////////////
 
 pub struct NewClientPacket {
@@ -273,7 +338,19 @@ pub struct NewClientPacket {
 }
 
 impl NewClientPacket {
-    pub fn as_bytes(self) -> BytesMut {
+
+    pub fn new(name: & String) -> Result<Self> {
+            let v_name = valid_name(name)?;
+            Ok(NewClientPacket {
+                        chat_name: v_name.to_owned(),
+            })
+    }
+
+}
+
+impl IrcPacket for NewClientPacket {
+
+    fn as_bytes(&self) -> BytesMut {
         let mut bytes_out = BytesMut::with_capacity(69);
         bytes_out.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8);
         bytes_out.put_u32(64);
@@ -285,7 +362,7 @@ impl NewClientPacket {
         bytes_out
     }
 
-    pub fn from_bytes(source: &[u8] ) -> Result<Self> {
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
         if source.len() != 69 {
             return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
         }
@@ -306,62 +383,53 @@ impl NewClientPacket {
         })
     }
 
-    pub fn new(name: & String) -> Result<Self> {
-            let v_name = valid_name(name)?;
-            Ok(NewClientPacket {
-                        chat_name: v_name.to_owned(),
-            })
+}
+
+
+///////////////////////////////////////////////
+// Heartbeat packet
+///////////////////////////////////////////////
+
+pub struct HeartbeatPacket {
+}
+
+impl HeartbeatPacket {
+
+    pub fn new() -> Result<'static, Self> {
+            Ok(HeartbeatPacket {})
     }
 
 }
 
-pub struct ErrorPacket {
-    pub error_code: IrcErrCode,
-}
+impl IrcPacket for HeartbeatPacket {
 
-impl ErrorPacket {
-    pub fn as_bytes(self) -> BytesMut {
-        let mut bytes_out = BytesMut::with_capacity(69);
-        bytes_out.put_u8( IrcKind::IRC_KIND_ERR as u8);
-        bytes_out.put_u32(1);
-        bytes_out.put_u8(self.error_code as u8);
+    fn as_bytes(&self) -> BytesMut {
+        let mut bytes_out = BytesMut::with_capacity(5);
+        bytes_out.put_u8( IrcKind::IRC_KIND_HEARTBEAT as u8);
+        bytes_out.put_u32(0);
         bytes_out
     }
 
-    pub fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 6 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 6));
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        if source.len() != 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
         }
 
         let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
-        if kind_raw != IrcKind::IRC_KIND_ERR{
+        if kind_raw != IrcKind::IRC_KIND_HEARTBEAT{
             return Err(IrcError::PacketMismatch());
         }
 
         let length = u32_from_slice(&source[1..5]);
-        if length != 1 {
+        if length != 0 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
-        let new_error_code: IrcErrCode = FromPrimitive::from_u8(source[5]).unwrap();
-        Ok(ErrorPacket {
-          error_code: new_error_code,
-        })
-    }
-
-    pub fn new(code: IrcErrCode ) -> Result<'static, Self> {
-            Ok(ErrorPacket {
-                        error_code: code.to_owned(),
-            })
+        Ok(HeartbeatPacket {})
     }
 
 }
 
-
-///////////////////////////////////////////////
-// 
-///////////////////////////////////////////////
-
 #[cfg(test)]
 #[path = "./lib/test.rs"]
-mod libt;
+mod irclib;

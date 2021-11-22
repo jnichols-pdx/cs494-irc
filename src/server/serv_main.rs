@@ -27,6 +27,7 @@ fn main() -> Result<'static, ()> {
     println!("Hello, world! [server]");
     let listener = TcpListener::bind("0.0.0.0:17734")?;
 
+        let heart = HeartbeatPacket::new()?;
     
     let mut users = HashMap::<String, Client>::new();
     let mut rooms= HashMap::<String, Room>::new();
@@ -41,6 +42,7 @@ fn main() -> Result<'static, ()> {
             users.insert(new_client.name.clone(), new_client);
             for (_,user) in users.iter_mut() {
                 user.connection.write(format!("{} has joined the server!", newbie_name).as_bytes())?;
+                user.connection.write(&heart.as_bytes())?;
             }
         }
             
