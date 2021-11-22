@@ -2,8 +2,8 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+//use num_derive::FromPrimitive;
+//use num_traits::FromPrimitive;
 use num_enum::FromPrimitive;
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 use std::convert::{TryInto, TryFrom};
@@ -18,6 +18,7 @@ pub type Result<'a, T> = std::result::Result<T, IrcError>;
 #[allow(non_camel_case_types)]
 //#[allow(dead_code)]
 #[derive(Copy,Clone,FromPrimitive,PartialEq)]
+#[repr(u8)]
 pub enum IrcKind {
     IRC_KIND_ERR = 0x01,
     IRC_KIND_NEW_CLIENT = 0x02,
@@ -38,6 +39,9 @@ pub enum IrcKind {
     IRC_KIND_FILE_TRANSFER = 0x11,
     IRC_KIND_CLIENT_DEPARTS = 0x12,
     IRC_KIND_SERVER_DEPARTS = 0x13,
+
+    #[num_enum(default)]
+    NO_MATCH_IRC_KIND,
 }
 
 #[allow(non_camel_case_types)]
@@ -311,7 +315,7 @@ impl IrcPacket for ErrorPacket {
             return Err(IrcError::PacketLengthIncorrect(source.len(), 6));
         }
 
-        let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_ERR{
             return Err(IrcError::PacketMismatch());
         }
@@ -321,9 +325,9 @@ impl IrcPacket for ErrorPacket {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
-        let new_error_code = IrcErrCode::from(source[5]);
+        let new_error_code: IrcErrCode = IrcErrCode::from(source[5]);
         match new_error_code {
-            NO_MATCH_IRC_ERR => Err(IrcError::CodeOutOfRange()),
+            IrcErrCode::NO_MATCH_IRC_ERR => Err(IrcError::CodeOutOfRange()),
             code => Ok(ErrorPacket { error_code: code, }),
         }
     }
@@ -367,7 +371,7 @@ impl IrcPacket for NewClientPacket {
             return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
         }
 
-        let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_NEW_CLIENT{
             return Err(IrcError::PacketMismatch());
         }
@@ -415,7 +419,8 @@ impl IrcPacket for HeartbeatPacket {
             return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
         }
 
-        let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        //let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
+        let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_HEARTBEAT{
             return Err(IrcError::PacketMismatch());
         }

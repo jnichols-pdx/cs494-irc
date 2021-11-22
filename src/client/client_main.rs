@@ -12,7 +12,7 @@ use std::env;
 use std::net::TcpStream;
 use std::io::{Write,Read};
 use std::error::Error;
-use num_traits::FromPrimitive;
+use num_enum::FromPrimitive;
 //use bytes::{Bytes, BytesMut, Buf, BufMut};*/
 //use irclib::IrcPacket;
 
@@ -31,7 +31,7 @@ fn main() -> Result<'static, ()>{
         println!("------");
         bytes_read = con.read(&mut buffer)?;
         if bytes_read> 0 {
-            if let Some(kind_raw) = FromPrimitive::from_u8(buffer[0]) {
+            let kind_raw = IrcKind::from(buffer[0]);
             match  kind_raw {
                 IrcKind::IRC_KIND_ERR =>{
                             let my_error = ErrorPacket::from_bytes(&buffer[0..6])?;
@@ -43,13 +43,11 @@ fn main() -> Result<'static, ()>{
 
                      println!("heartbeat!");
                 },
-                _ => {println!("unknwon packet");},
+                //_ => {println!("unknwon packet");},
+                _ => println!("{}",std::str::from_utf8(&buffer[0..bytes_read]).unwrap()),
 
             }
-        } else { //for now we are sending raw text instead of message packets.
-                println!("{}",std::str::from_utf8(&buffer[0..bytes_read]).unwrap());
-        };
-    }else {
+        }else {
             break;
         }
     }

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn reject_name_chars() {
+fn name_chars() {
     assert!(valid_name(&"blah".to_string()).is_ok());  //text is ok
 
     //ascii low control chars are not
@@ -62,7 +62,7 @@ fn reject_name_chars() {
 }
 
 #[test]
-fn reject_name_length() {
+fn name_length() {
     assert!(valid_name(&"hunter2".to_string()).is_ok());  //short names are OK
 
     assert!(valid_name(&"abcdefghijklmnopqrstuvwxyz1234567890".to_string()).is_err()); //long names are not
@@ -82,7 +82,7 @@ fn reject_name_length() {
 }
 
 #[test]
-fn reject_file_name_chars() {
+fn file_name_chars() {
     assert!(valid_filename(&"blah".to_string()).is_ok());  //text is ok
 
     //ascii low control chars are not
@@ -148,7 +148,7 @@ fn reject_file_name_chars() {
 }
 
 #[test]
-fn reject_file_name_length() {
+fn file_name_length() {
     assert!(valid_filename(&"hunter2".to_string()).is_ok());  //short filenames are OK
     assert!(valid_filename(&"".to_string()).is_err()); //empty filenames are not
 
@@ -161,7 +161,7 @@ fn reject_file_name_length() {
 
 
 #[test]
-fn reject_message_chars() {
+fn message_chars() {
     assert!(valid_message(&"blah\0".to_string()).is_ok());  //text is ok
 
     //ascii low control chars are not
@@ -222,7 +222,7 @@ fn reject_message_chars() {
 }
 
 #[test]
-fn reject_message_length() {
+fn message_length() {
     assert!(valid_message(&"I'd like to introduce myself. Hello!\0".to_string()).is_ok());  //short messages are OK
 
     assert!(valid_message(&"".to_string()).is_err()); //empty messages are not
@@ -323,5 +323,84 @@ fn new_client_packet_from_bytes() {
 fn new_client_packet_as_bytes() {
     let ncp = NewClientPacket::new(&"ExampleName".to_string()).unwrap();
     assert_eq!(ncp.as_bytes(), Bytes::from_static(b"\x02\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+}
+
+
+#[test]
+fn heartbeat_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(5);
+    bytes_good.put_u8( IrcKind::IRC_KIND_HEARTBEAT as u8);
+    bytes_good.put_u32(0);
+
+    let hbp_good = HeartbeatPacket::from_bytes(&bytes_good);
+    assert!(hbp_good.is_ok());
+
+
+    let mut bytes_wrong_length = BytesMut::with_capacity(5);
+    bytes_wrong_length.put_u8( IrcKind::IRC_KIND_HEARTBEAT as u8);
+    bytes_wrong_length.put_u32(60);
+
+    let hbp_bad_len = HeartbeatPacket::from_bytes(&bytes_wrong_length);
+    assert!(hbp_bad_len.is_err());
+
+
+    let mut bytes_wrong_type = BytesMut::with_capacity(5);
+    bytes_wrong_type.put_u8( IrcKind::IRC_KIND_ERR as u8);
+    bytes_wrong_type.put_u32(0);
+
+    let hbp_bad_type = HeartbeatPacket::from_bytes(&bytes_wrong_type);
+    assert!(hbp_bad_type.is_err());
+
+}
+
+#[test]
+fn heartbeat_packet_as_bytes() {
+    let hbp = HeartbeatPacket::new().unwrap();
+    assert_eq!(hbp.as_bytes(), Bytes::from_static(b"\x03\0\0\0\0"));
+}
+
+
+#[test]
+fn error_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(6);
+    bytes_good.put_u8( IrcKind::IRC_KIND_ERR as u8);
+    bytes_good.put_u32(1);
+    bytes_good.put_u8( IrcErrCode::IRC_ERR_ILLEGAL_LENGTH as u8);
+
+    let erp_good = ErrorPacket::from_bytes(&bytes_good);
+    assert!(erp_good.is_ok());
+
+
+    let mut bytes_wrong_length = BytesMut::with_capacity(6);
+    bytes_wrong_length.put_u8( IrcKind::IRC_KIND_ERR as u8);
+    bytes_wrong_length.put_u32(60);
+    bytes_wrong_length.put_u8( IrcErrCode::IRC_ERR_ILLEGAL_LENGTH as u8);
+
+    let erp_bad_len = ErrorPacket::from_bytes(&bytes_wrong_length);
+    assert!(erp_bad_len.is_err());
+
+
+    let mut bytes_wrong_type = BytesMut::with_capacity(6);
+    bytes_wrong_type.put_u8( IrcKind::IRC_KIND_HEARTBEAT as u8);
+    bytes_wrong_type.put_u32(1);
+    bytes_wrong_type.put_u8( IrcErrCode::IRC_ERR_ILLEGAL_LENGTH as u8);
+
+    let erp_bad_type = ErrorPacket::from_bytes(&bytes_wrong_type);
+    assert!(erp_bad_type.is_err());
+
+    let mut bytes_invalid_errcode = BytesMut::with_capacity(6);
+    bytes_invalid_errcode.put_u8( IrcKind::IRC_KIND_ERR as u8);
+    bytes_invalid_errcode.put_u32(1);
+    bytes_invalid_errcode.put_u8(255);
+
+    let erp_bad_code = ErrorPacket::from_bytes(&bytes_invalid_errcode);
+    assert!(erp_bad_code.is_err());
+
+}
+
+#[test]
+fn error_packet_as_bytes() {
+    let erp = ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE).unwrap();
+    assert_eq!(erp.as_bytes(), Bytes::from_static(b"\x01\0\0\0\x01\x04"));
 }
 
