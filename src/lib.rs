@@ -17,7 +17,7 @@ pub type Result<'a, T> = std::result::Result<T, IrcError>;
 
 #[allow(non_camel_case_types)]
 //#[allow(dead_code)]
-#[derive(Copy,Clone,FromPrimitive,PartialEq)]
+#[derive(Copy,Clone,FromPrimitive,PartialEq,Debug)]
 #[repr(u8)]
 pub enum IrcKind {
     IRC_KIND_ERR = 0x01,
@@ -46,7 +46,7 @@ pub enum IrcKind {
 
 #[allow(non_camel_case_types)]
 //#[allow(dead_code)]
-#[derive(Copy,Clone,FromPrimitive,PartialEq)]
+#[derive(Copy,Clone,FromPrimitive,PartialEq,Debug)]
 #[repr(u8)]
 pub enum IrcErrCode {
     IRC_ERR_UNKNOWN = 0x01,
@@ -311,13 +311,13 @@ impl IrcPacket for ErrorPacket {
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 6 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 6));
-        }
-
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_ERR{
             return Err(IrcError::PacketMismatch());
+        }
+
+        if source.len() != 6 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 6));
         }
 
         let length = u32_from_slice(&source[1..5]);
@@ -367,14 +367,15 @@ impl IrcPacket for NewClientPacket {
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 69 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
-        }
-
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_NEW_CLIENT{
             return Err(IrcError::PacketMismatch());
         }
+
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
+        }
+
 
         let length = u32_from_slice(&source[1..5]);
         if length != 64 {
@@ -415,14 +416,13 @@ impl IrcPacket for HeartbeatPacket {
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 5 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
-        }
-
-        //let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_HEARTBEAT{
             return Err(IrcError::PacketMismatch());
+        }
+
+        if source.len() != 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
         }
 
         let length = u32_from_slice(&source[1..5]);
@@ -469,13 +469,13 @@ impl IrcPacket for EnterRoomPacket {
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 69 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
-        }
-
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_ENTER_ROOM{
             return Err(IrcError::PacketMismatch());
+        }
+
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
         }
 
         let length = u32_from_slice(&source[1..5]);
@@ -524,13 +524,13 @@ impl IrcPacket for LeaveRoomPacket {
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 69 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
-        }
-
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_LEAVE_ROOM{
             return Err(IrcError::PacketMismatch());
+        }
+
+        if source.len() != 69 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
         }
 
         let length = u32_from_slice(&source[1..5]);
@@ -570,14 +570,13 @@ impl IrcPacket for ListRoomsPacket {
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 5 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
-        }
-
-        //let kind_raw: IrcKind = FromPrimitive::from_u8(source[0]).unwrap();
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_LIST_ROOMS{
             return Err(IrcError::PacketMismatch());
+        }
+
+        if source.len() != 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 5));
         }
 
         let length = u32_from_slice(&source[1..5]);
@@ -778,17 +777,17 @@ impl IrcPacket for UserListingPacket {
 // Query User Packet
 ///////////////////////////////////////////////
 
-    #[allow(non_camel_case_types)]
-    #[derive(Copy,Clone,FromPrimitive,PartialEq)]
-    #[repr(u8)]
-    pub enum UserStatus {
-        Online = 0x01,
-        Offline = 0x00,
-        Request = 0x02,
+#[allow(non_camel_case_types)]
+#[derive(Copy,Clone,FromPrimitive,PartialEq,Debug)]
+#[repr(u8)]
+pub enum UserStatus {
+    Online = 0x01,
+    Offline = 0x00,
+    Request = 0x02,
 
-        #[num_enum(default)]
-        NO_MATCH_USER_STATUS,
-    }
+    #[num_enum(default)]
+    NO_MATCH_USER_STATUS,
+}
 
 pub struct QueryUserPacket {
 
@@ -806,6 +805,17 @@ impl QueryUserPacket {
             })
     }
 
+    pub fn set_online(&mut self){
+        self.status = UserStatus::Online;
+    }
+
+    pub fn set_offline(&mut self){
+        self.status = UserStatus::Offline;
+    }
+    pub fn set_query(&mut self){
+        self.status = UserStatus::Request;
+    }
+
 }
 
 impl IrcPacket for QueryUserPacket {
@@ -813,34 +823,32 @@ impl IrcPacket for QueryUserPacket {
     fn as_bytes(&self) -> BytesMut {
         let mut bytes_out = BytesMut::with_capacity(70);
         bytes_out.put_u8( IrcKind::IRC_KIND_QUERY_USER as u8);
-        bytes_out.put_u32(64);
+        bytes_out.put_u32(65);
         bytes_out.put_slice(&self.user_name.as_bytes());
         let remain = 64 - self.user_name.len();
-        for x in 1..remain+1 {
-            bytes_out.put_u8(b'\0');
-        }
+        bytes_out.put_bytes(b'\0', remain);
         bytes_out.put_u8( self.status as u8);
         bytes_out
     }
 
     fn from_bytes(source: &[u8] ) -> Result<Self> {
-        if source.len() != 69 {
-            return Err(IrcError::PacketLengthIncorrect(source.len(), 69));
-        }
-
         let kind_raw= IrcKind::from(source[0]);
         if kind_raw != IrcKind::IRC_KIND_QUERY_USER{
             return Err(IrcError::PacketMismatch());
         }
 
+        if source.len() != 70 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), 70));
+        }
+
         let length = u32_from_slice(&source[1..5]);
-        if length != 64 {
+        if length != 65 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
         let new_username =  valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
 
-        let new_user_status: UserStatus = UserStatus::from(source[5]);
+        let new_user_status: UserStatus = UserStatus::from(source[69]);
         match new_user_status {
             UserStatus::NO_MATCH_USER_STATUS => Err(IrcError::CodeOutOfRange()),
             user_status=> Ok(QueryUserPacket {

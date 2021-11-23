@@ -285,9 +285,9 @@ fn new_client_packet_from_bytes() {
     let remain = 64 - "Bobtato".len(); 
     bytes_lenf.put_bytes(b'\0',remain);
 
-    let ncp_bad_short = NewClientPacket::from_bytes(&bytes_lenf);
-    assert!(ncp_bad_short.is_err());
-    if let Err(e) = ncp_bad_short {
+    let ncp_bad_lenf = NewClientPacket::from_bytes(&bytes_lenf);
+    assert!(ncp_bad_lenf.is_err());
+    if let Err(e) = ncp_bad_lenf {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::FieldLengthIncorrect() => true, _ => false });
@@ -300,9 +300,9 @@ fn new_client_packet_from_bytes() {
     let remain = 64 - "Bobtato".len(); 
     bytes_mismatch.put_bytes(b'\0',remain);
 
-    let ncp_bad_short = NewClientPacket::from_bytes(&bytes_mismatch);
-    assert!(ncp_bad_short.is_err());
-    if let Err(e) = ncp_bad_short {
+    let ncp_bad_mismatch = NewClientPacket::from_bytes(&bytes_mismatch);
+    assert!(ncp_bad_mismatch.is_err());
+    if let Err(e) = ncp_bad_mismatch {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::PacketMismatch() => true, _ => false });
@@ -441,9 +441,9 @@ fn enter_room_packet_from_bytes() {
     let remain = 64 - "Bob'sroom".len(); 
     bytes_lenf.put_bytes(b'\0',remain);
 
-    let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_lenf);
-    assert!(erp_bad_short.is_err());
-    if let Err(e) = erp_bad_short {
+    let erp_bad_lenf = EnterRoomPacket::from_bytes(&bytes_lenf);
+    assert!(erp_bad_lenf.is_err());
+    if let Err(e) = erp_bad_lenf {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::FieldLengthIncorrect() => true, _ => false });
@@ -456,9 +456,9 @@ fn enter_room_packet_from_bytes() {
     let remain = 64 - "Bob'sroom".len(); 
     bytes_mismatch.put_bytes(b'\0',remain);
 
-    let erp_bad_short = EnterRoomPacket::from_bytes(&bytes_mismatch);
-    assert!(erp_bad_short.is_err());
-    if let Err(e) = erp_bad_short {
+    let erp_bad_mismatch = EnterRoomPacket::from_bytes(&bytes_mismatch);
+    assert!(erp_bad_mismatch.is_err());
+    if let Err(e) = erp_bad_mismatch {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::PacketMismatch() => true, _ => false });
@@ -510,9 +510,9 @@ fn leave_room_packet_from_bytes() {
     let remain = 64 - "Bob'sroom".len(); 
     bytes_lenf.put_bytes(b'\0',remain);
 
-    let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_lenf);
-    assert!(lrp_bad_short.is_err());
-    if let Err(e) = lrp_bad_short {
+    let lrp_bad_lenf = LeaveRoomPacket::from_bytes(&bytes_lenf);
+    assert!(lrp_bad_lenf.is_err());
+    if let Err(e) = lrp_bad_lenf {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::FieldLengthIncorrect() => true, _ => false });
@@ -525,9 +525,9 @@ fn leave_room_packet_from_bytes() {
     let remain = 64 - "Bob'sroom".len();
     bytes_mismatch.put_bytes(b'\0',remain);
 
-    let lrp_bad_short = LeaveRoomPacket::from_bytes(&bytes_mismatch);
-    assert!(lrp_bad_short.is_err());
-    if let Err(e) = lrp_bad_short {
+    let lrp_bad_mismatch = LeaveRoomPacket::from_bytes(&bytes_mismatch);
+    assert!(lrp_bad_mismatch.is_err());
+    if let Err(e) = lrp_bad_mismatch {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::PacketMismatch() => true, _ => false });
@@ -643,9 +643,9 @@ fn room_listing_packet_from_bytes() {
     let remain = 64 - "Bob'sroom".len(); 
     bytes_lenf.put_bytes(b'\0',remain);
 
-    let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_lenf);
-    assert!(rlp_bad_short.is_err());
-    if let Err(e) = rlp_bad_short {
+    let rlp_bad_lenf = RoomListingPacket::from_bytes(&bytes_lenf);
+    assert!(rlp_bad_lenf.is_err());
+    if let Err(e) = rlp_bad_lenf {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e {IrcError::PacketLengthIncorrect(_,_) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
@@ -659,9 +659,9 @@ fn room_listing_packet_from_bytes() {
     let remain = 64 - "Bob'sroom".len();
     bytes_mismatch.put_bytes(b'\0',remain);
 
-    let rlp_bad_short = RoomListingPacket::from_bytes(&bytes_mismatch);
-    assert!(rlp_bad_short.is_err());
-    if let Err(e) = rlp_bad_short {
+    let rlp_bad_mismatch = RoomListingPacket::from_bytes(&bytes_mismatch);
+    assert!(rlp_bad_mismatch.is_err());
+    if let Err(e) = rlp_bad_mismatch {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::PacketMismatch() => true, _ => false });
@@ -752,12 +752,12 @@ fn user_listing_packet_from_bytes() {
     let mut bytes_short = BytesMut::with_capacity(133);
     bytes_short.put_u8( IrcKind::IRC_KIND_USER_LISTING as u8);
     bytes_short.put_u32(128);
-    bytes_good3.put_slice("OtherRoom".as_bytes());
+    bytes_short.put_slice("OtherRoom".as_bytes());
     let remain = 64 - "OtherRoom".len();
-    bytes_good3.put_bytes(b'\0', remain);
+    bytes_short.put_bytes(b'\0', remain);
     bytes_short.put_slice("Franklin".as_bytes());
     let remain = 60 - "Franklin".len(); //TOO SHORT
-    bytes_good3.put_bytes(b'\0', remain);
+    bytes_short.put_bytes(b'\0', remain);
 
     let ulp_bad_short = UserListingPacket::from_bytes(&bytes_short);
     assert!(ulp_bad_short.is_err());
@@ -778,9 +778,9 @@ fn user_listing_packet_from_bytes() {
     let remain = 64 - "Franklin".len();
     bytes_lenf.put_bytes(b'\0',64);
 
-    let ulp_bad_short = UserListingPacket::from_bytes(&bytes_lenf);
-    assert!(ulp_bad_short.is_err());
-    if let Err(e) = ulp_bad_short {
+    let ulp_bad_lenf = UserListingPacket::from_bytes(&bytes_lenf);
+    assert!(ulp_bad_lenf.is_err());
+    if let Err(e) = ulp_bad_lenf {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e {IrcError::PacketLengthIncorrect(_,_) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
@@ -796,9 +796,9 @@ fn user_listing_packet_from_bytes() {
     let remain = 64 - "Franklin".len();
     bytes_mismatch.put_bytes(b'\0',64);
 
-    let ulp_bad_short = UserListingPacket::from_bytes(&bytes_mismatch);
-    assert!(ulp_bad_short.is_err());
-    if let Err(e) = ulp_bad_short {
+    let ulp_bad_mismatch = UserListingPacket::from_bytes(&bytes_mismatch);
+    assert!(ulp_bad_mismatch.is_err());
+    if let Err(e) = ulp_bad_mismatch {
         //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
         //does NOT implement PartialEq
         assert!(match e { IrcError::PacketMismatch() => true, _ => false });
@@ -834,4 +834,105 @@ fn user_listing_packet_as_bytes() {
     let mut ulpfv = UserListingPacket::from_room_and_vec(&"r/IRC".to_string(), &users_vec).unwrap();
 
     assert_eq!(ulpfv.as_bytes(), Bytes::from_static(b"\x08\0\0\x01\x00r/IRC\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
+}
+
+///////////////////////////////////////////////
+//  Query User Packet
+///////////////////////////////////////////////
+
+#[test]
+fn query_user_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(70);
+    bytes_good.put_u8( IrcKind::IRC_KIND_QUERY_USER as u8);
+    bytes_good.put_u32(65);
+
+    //first user
+    bytes_good.put_slice("Bob'suser".as_bytes());
+    let remain = 64 - "Bob'suser".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_u8(2);
+
+    let qup_good = QueryUserPacket::from_bytes(&bytes_good);
+    assert!(qup_good.is_ok());
+    let qup = qup_good.unwrap();
+    assert_eq!(qup.user_name, "Bob'suser".to_string());
+
+    let mut bytes_short = BytesMut::with_capacity(70);
+    bytes_short.put_u8( IrcKind::IRC_KIND_QUERY_USER as u8);
+    bytes_short.put_u32(65);
+    bytes_short.put_slice("Franklin".as_bytes());
+    let remain = 60 - "Franklin".len(); //TOO SHORT
+    bytes_short.put_bytes(b'\0', remain);
+    bytes_short.put_u8(1);
+
+    let qup_bad_short = QueryUserPacket::from_bytes(&bytes_short);
+    assert!(qup_bad_short.is_err());
+    if let Err(e) = qup_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,70) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(133);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_QUERY_USER as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("Franklin".as_bytes());
+    let remain = 64 - "Franklin".len();
+    bytes_lenf.put_bytes(b'\0',64);
+    bytes_lenf.put_u8(0);
+
+    let qup_bad_lenf = QueryUserPacket::from_bytes(&bytes_lenf);
+    assert!(qup_bad_lenf.is_err());
+    if let Err(e) = qup_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,70) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(133);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(65);
+    bytes_mismatch.put_slice("Franklin".as_bytes());
+    let remain = 64 - "Franklin".len();
+    bytes_mismatch.put_bytes(b'\0',64);
+    bytes_mismatch.put_u8(2);
+
+    let qup_bad_mismatch = QueryUserPacket::from_bytes(&bytes_mismatch);
+    assert!(qup_bad_mismatch.is_err());
+    if let Err(e) = qup_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        println!("{:?}",e);
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn query_user_set_status() {
+    let mut qup = QueryUserPacket::new(&"Pete11231@".to_string()).unwrap();
+    assert_eq!(qup.status, UserStatus::Request);
+
+    qup.set_online();
+    assert_eq!(qup.status, UserStatus::Online);
+
+    qup.set_offline();
+    assert_eq!(qup.status, UserStatus::Offline);
+
+    qup.set_query();
+    assert_eq!(qup.status, UserStatus::Request);
+
+}
+
+#[test]
+fn query_user_packet_as_bytes() {
+    let mut qup = QueryUserPacket::new(&"Charley42".to_string()).unwrap();
+    qup.set_online();
+    assert_eq!(qup.as_bytes(), Bytes::from_static(b"\x09\0\0\0\x41Charley42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x01"));
+
+    qup.set_offline();
+    assert_eq!(qup.as_bytes(), Bytes::from_static(b"\x09\0\0\0\x41Charley42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x00"));
+
+    qup.set_query();
+    assert_eq!(qup.as_bytes(), Bytes::from_static(b"\x09\0\0\0\x41Charley42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x02"));
+
 }
