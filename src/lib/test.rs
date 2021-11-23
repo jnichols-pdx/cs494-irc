@@ -1100,3 +1100,114 @@ fn broadcast_message_packet_as_bytes() {
     assert_eq!(bmp.as_bytes(), Bytes::from_static(b"\x0B\0\0\0\x06Hello\0"));
 
 }
+
+///////////////////////////////////////////////
+//  Post Message Packet
+///////////////////////////////////////////////
+
+#[test]
+fn post_message_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(155);
+    bytes_good.put_u8( IrcKind::IRC_KIND_POST_MESSAGE as u8);
+    bytes_good.put_u32(150);
+
+    bytes_good.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_slice("Dude, where'd you go?\0".as_bytes());
+
+    let pmp_good = PostMessagePacket::from_bytes(&bytes_good);
+    assert!(pmp_good.is_ok());
+    let pmp = pmp_good.unwrap();
+    assert_eq!(pmp.get_message(), "Dude, where'd you go?".to_string());
+
+    let mut bytes_short = BytesMut::with_capacity(145);
+    bytes_short.put_u8( IrcKind::IRC_KIND_POST_MESSAGE as u8);
+    bytes_short.put_u32(140);
+    bytes_short.put_slice("PSU".as_bytes());
+    let remain = 60 - "PSU".len(); //TOO SHORT
+    bytes_short.put_bytes(b'\0', remain);
+    bytes_good.put_slice("ProffesorSnape".as_bytes());
+    let remain = 64 - "ProfessorSnape".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_short.put_slice(b"messagebody\0");
+
+    let pmp_bad_short = PostMessagePacket::from_bytes(&bytes_short);
+    assert!(pmp_bad_short.is_err());
+    if let Err(e) = pmp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,_) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(209);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_POST_MESSAGE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("News&Rumours".as_bytes());
+    let remain = 64 - "News&Rumours".len();
+    bytes_lenf.put_bytes(b'\0',64);
+    bytes_lenf.put_slice("SpamCaller".as_bytes());
+    let remain = 64 - "SpamCaller".len();
+    bytes_lenf.put_bytes(b'\0',64);
+    bytes_lenf.put_slice(b"Our records show your car's warranty is almost expired! If you'd like to...\0");
+
+    let pmp_bad_lenf = PostMessagePacket::from_bytes(&bytes_lenf);
+    assert!(pmp_bad_lenf.is_err());
+    if let Err(e) = pmp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        println!("{:?}",e);
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,145) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(137);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(132);
+    bytes_mismatch.put_slice("Cars".as_bytes());
+    let remain = 64 - "Cars".len();
+    bytes_mismatch.put_bytes(b'\0',64);
+    bytes_mismatch.put_slice("DudeBro".as_bytes());
+    let remain = 64 - "DudeBro".len();
+    bytes_mismatch.put_bytes(b'\0',64);
+    bytes_mismatch.put_slice("yo!\0".as_bytes());
+
+    let pmp_bad_mismatch = PostMessagePacket::from_bytes(&bytes_mismatch);
+    assert!(pmp_bad_mismatch.is_err());
+    if let Err(e) = pmp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+    
+}
+#[test]
+fn post_message() {
+    let pmpwrap = PostMessagePacket::new(&"RTSGaming".to_string(), &"blah_user".to_string(), &"This should be good.\0".to_string());
+    assert!(pmpwrap.is_ok());
+    let pmp = pmpwrap.unwrap();
+    assert_eq!(pmp.room, "RTSGaming");
+    assert_eq!(pmp.sender, "blah_user");
+    assert_eq!(pmp.message, "This should be good.\0");
+    assert_eq!(pmp.get_message(), "This should be good.");
+
+    let mut pmpwrap = PostMessagePacket::new(&"RTSGaming".to_string(), &"SCV429".to_string(), &"AHH! You scared me!".to_string());
+    assert!(pmpwrap.is_ok());
+    let pmp = pmpwrap.unwrap();
+    assert_eq!(pmp.room, "RTSGaming");
+    assert_eq!(pmp.sender, "SCV429");
+    assert_eq!(pmp.message, "AHH! You scared me!\0");
+    assert_eq!(pmp.get_message(), "AHH! You scared me!");
+
+    let mut pmp_fail = PostMessagePacket::new(&"RTSGaming".to_string(),&"SCV429".to_string(), &"AHH! \0You scared me!".to_string());
+    assert!(pmp_fail.is_err());
+}
+
+#[test]
+fn post_message_packet_as_bytes() {
+    let mut pmp = PostMessagePacket::new(&"Channel42".to_string(), &"New_User".to_string(), &"Hello".to_string()).unwrap();
+    assert_eq!(pmp.as_bytes(), Bytes::from_static(b"\x0C\0\0\0\x86Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0New_User\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
+
+}

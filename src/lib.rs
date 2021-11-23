@@ -1001,6 +1001,90 @@ impl IrcPacket for BroadcastMessagePacket {
     }
 }
 
+///////////////////////////////////////////////
+// Post Message Packet
+///////////////////////////////////////////////
+
+pub struct PostMessagePacket{
+    pub room: String,
+    pub sender: String,
+    pub message: String,
+}
+
+impl PostMessagePacket {
+
+    pub fn new<'x>(to_room: &String, from_user: &String, message: &String) -> Result<'x, PostMessagePacket> {
+            let v_room = valid_name(to_room)?;
+            let v_sender = valid_name(from_user)?;
+            let mut v_message;
+            if message.ends_with('\0') {
+                v_message = valid_message(&message)?.to_owned();
+            } else {
+                v_message = message.to_owned();
+                v_message.push('\0');
+                v_message = valid_message(&v_message)?.to_owned();
+            }
+            Ok(PostMessagePacket {
+                    room: v_room.to_owned(),
+                    sender: v_sender.to_owned(),
+                    message: v_message.to_owned(),
+                })
+    }
+
+    pub fn get_message(&self) -> String {
+        let mut outgoing = self.message.clone();
+        outgoing.pop().unwrap();
+        outgoing
+    }
+
+}
+
+impl IrcPacket for PostMessagePacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let message_bytelength = self.message.len();
+        let mut bytes_out = BytesMut::with_capacity(5+64+64+(message_bytelength as usize));
+        bytes_out.put_u8( IrcKind::IRC_KIND_POST_MESSAGE as u8);
+        bytes_out.put_u32(64+64+(message_bytelength as u32));
+        bytes_out.put_slice(&self.room.as_bytes());
+        let remain = 64 - self.room.len();
+        bytes_out.put_bytes(b'\0', remain);
+        bytes_out.put_slice(&self.sender.as_bytes());
+        let remain = 64 - self.sender.len();
+        bytes_out.put_bytes(b'\0', remain);
+        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_POST_MESSAGE {
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length : usize = u32_from_slice(&source[1..5]) as usize;
+
+        if length < 134 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        if source.len() != length + 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), length + 5));
+        }
+
+        let new_room: String = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
+
+        let new_sender: String = valid_name(&name_from_slice(&source[69..133])?)?.to_owned();
+
+        let new_message = valid_message(&String::from_utf8(source[133..].to_vec())?)?.to_string();
+
+        Ok(PostMessagePacket {
+          room: new_room,
+          sender: new_sender,
+          message: new_message,
+        })
+    }
+}
 
 #[cfg(test)]
 #[path = "./lib/test.rs"]
