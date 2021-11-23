@@ -934,6 +934,73 @@ impl IrcPacket for SendMessagePacket {
     }
 }
 
+///////////////////////////////////////////////
+// Broadcast Message Packet
+///////////////////////////////////////////////
+
+pub struct BroadcastMessagePacket{
+    pub message: String,
+}
+
+impl BroadcastMessagePacket {
+
+    pub fn new(message: &String) -> Result<BroadcastMessagePacket> {
+            let mut v_message;
+            if message.ends_with('\0') {
+                v_message = valid_message(&message)?.to_owned();
+            } else {
+                v_message = message.to_owned();
+                v_message.push('\0');
+                v_message = valid_message(&v_message)?.to_owned();
+            }
+            Ok(BroadcastMessagePacket {
+                    message: v_message.to_owned(),
+                })
+    }
+
+    pub fn get_message(&self) -> String {
+        let mut outgoing = self.message.clone();
+        outgoing.pop().unwrap();
+        outgoing
+    }
+
+}
+
+impl IrcPacket for BroadcastMessagePacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let message_bytelength = self.message.len();
+        let mut bytes_out = BytesMut::with_capacity(5+(message_bytelength as usize));
+        bytes_out.put_u8( IrcKind::IRC_KIND_BROADCAST_MESSAGE as u8);
+        bytes_out.put_u32(message_bytelength as u32);
+        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_BROADCAST_MESSAGE {
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length : usize = u32_from_slice(&source[1..5]) as usize;
+
+        if length < 1 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        if source.len() != length + 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), length + 5));
+        }
+
+        let new_message = valid_message(&String::from_utf8(source[5..].to_vec())?)?.to_string();
+
+        Ok(BroadcastMessagePacket {
+          message: new_message,
+        })
+    }
+}
+
 
 #[cfg(test)]
 #[path = "./lib/test.rs"]

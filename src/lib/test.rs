@@ -947,7 +947,6 @@ fn send_message_packet_from_bytes() {
     bytes_good.put_u8( IrcKind::IRC_KIND_SEND_MESSAGE as u8);
     bytes_good.put_u32(86);
 
-    //first user
     bytes_good.put_slice("Bob's_room".as_bytes());
     let remain = 64 - "Bob's_room".len();
     bytes_good.put_bytes(b'\0', remain);
@@ -1031,5 +1030,73 @@ fn send_message() {
 fn send_message_packet_as_bytes() {
     let mut smp = SendMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
     assert_eq!(smp.as_bytes(), Bytes::from_static(b"\x0A\0\0\0\x46Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
+
+}
+
+///////////////////////////////////////////////
+//  Broadcast Message Packet
+///////////////////////////////////////////////
+
+#[test]
+fn broadcast_message_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(27);
+    bytes_good.put_u8( IrcKind::IRC_KIND_BROADCAST_MESSAGE as u8);
+    bytes_good.put_u32(22);
+    bytes_good.put_slice("Dude, where'd you go?\0".as_bytes());
+
+    let bmp_good = BroadcastMessagePacket::from_bytes(&bytes_good);
+    assert!(bmp_good.is_ok());
+    let bmp = bmp_good.unwrap();
+    assert_eq!(bmp.get_message(), "Dude, where'd you go?".to_string());
+
+    let mut bytes_lenf= BytesMut::with_capacity(81);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_BROADCAST_MESSAGE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice(b"Our records show your car's warranty is almost expired! If you'd like to...\0");
+
+    let bmp_bad_lenf = BroadcastMessagePacket::from_bytes(&bytes_lenf);
+    assert!(bmp_bad_lenf.is_err());
+    if let Err(e) = bmp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(81,_) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(9);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(4);
+    bytes_mismatch.put_slice("yo!\0".as_bytes());
+
+    let bmp_bad_mismatch = BroadcastMessagePacket::from_bytes(&bytes_mismatch);
+    assert!(bmp_bad_mismatch.is_err());
+    if let Err(e) = bmp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+    
+}
+#[test]
+fn broadcast_message() {
+    let bmpwrap = BroadcastMessagePacket::new(&"This should be good.\0".to_string());
+    assert!(bmpwrap.is_ok());
+    let bmp = bmpwrap.unwrap();
+    assert_eq!(bmp.message, "This should be good.\0");
+    assert_eq!(bmp.get_message(), "This should be good.");
+
+    let mut bmpwrap = BroadcastMessagePacket::new(&"AHH! You scared me!".to_string());
+    assert!(bmpwrap.is_ok());
+    let bmp = bmpwrap.unwrap();
+    assert_eq!(bmp.message, "AHH! You scared me!\0");
+    assert_eq!(bmp.get_message(), "AHH! You scared me!");
+
+    let mut bmp_fail = BroadcastMessagePacket::new(&"AHH! \0You scared me!".to_string());
+    assert!(bmp_fail.is_err());
+}
+
+#[test]
+fn broadcast_message_packet_as_bytes() {
+    let mut bmp = BroadcastMessagePacket::new(&"Hello".to_string()).unwrap();
+    assert_eq!(bmp.as_bytes(), Bytes::from_static(b"\x0B\0\0\0\x06Hello\0"));
 
 }
