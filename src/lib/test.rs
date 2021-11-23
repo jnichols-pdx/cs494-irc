@@ -936,3 +936,100 @@ fn query_user_packet_as_bytes() {
     assert_eq!(qup.as_bytes(), Bytes::from_static(b"\x09\0\0\0\x41Charley42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x02"));
 
 }
+
+///////////////////////////////////////////////
+//  Send Message Packet
+///////////////////////////////////////////////
+
+#[test]
+fn send_message_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(91);
+    bytes_good.put_u8( IrcKind::IRC_KIND_SEND_MESSAGE as u8);
+    bytes_good.put_u32(86);
+
+    //first user
+    bytes_good.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_slice("Dude, where'd you go?\0".as_bytes());
+
+    let smp_good = SendMessagePacket::from_bytes(&bytes_good);
+    assert!(smp_good.is_ok());
+    let smp = smp_good.unwrap();
+    assert_eq!(smp.get_message(), "Dude, where'd you go?".to_string());
+
+    let mut bytes_short = BytesMut::with_capacity(81);
+    bytes_short.put_u8( IrcKind::IRC_KIND_SEND_MESSAGE as u8);
+    bytes_short.put_u32(76);
+    bytes_short.put_slice("PSU".as_bytes());
+    let remain = 60 - "PSU".len(); //TOO SHORT
+    bytes_short.put_bytes(b'\0', remain);
+    bytes_short.put_slice(b"messagebody\0");
+
+    let smp_bad_short = SendMessagePacket::from_bytes(&bytes_short);
+    assert!(smp_bad_short.is_err());
+    if let Err(e) = smp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,81) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(145);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_SEND_MESSAGE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("News&Rumours".as_bytes());
+    let remain = 64 - "News&Rumours".len();
+    bytes_lenf.put_bytes(b'\0',64);
+    bytes_lenf.put_slice(b"Our records show your car's warranty is almost expired! If you'd like to...\0");
+
+    let smp_bad_lenf = SendMessagePacket::from_bytes(&bytes_lenf);
+    assert!(smp_bad_lenf.is_err());
+    if let Err(e) = smp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,145) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(73);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(68);
+    bytes_mismatch.put_slice("Cars".as_bytes());
+    let remain = 64 - "Cars".len();
+    bytes_mismatch.put_bytes(b'\0',64);
+    bytes_mismatch.put_slice("yo!\0".as_bytes());
+
+    let smp_bad_mismatch = SendMessagePacket::from_bytes(&bytes_mismatch);
+    assert!(smp_bad_mismatch.is_err());
+    if let Err(e) = smp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+    
+}
+#[test]
+fn send_message() {
+    let smpwrap = SendMessagePacket::new(&"RTSGaming".to_string(), &"This should be good.\0".to_string());
+    assert!(smpwrap.is_ok());
+    let smp = smpwrap.unwrap();
+    assert_eq!(smp.room, "RTSGaming");
+    assert_eq!(smp.message, "This should be good.\0");
+    assert_eq!(smp.get_message(), "This should be good.");
+
+    let mut smpwrap = SendMessagePacket::new(&"RTSGaming".to_string(), &"AHH! You scared me!".to_string());
+    assert!(smpwrap.is_ok());
+    let smp = smpwrap.unwrap();
+    assert_eq!(smp.room, "RTSGaming");
+    assert_eq!(smp.message, "AHH! You scared me!\0");
+    assert_eq!(smp.get_message(), "AHH! You scared me!");
+
+    let mut smp_fail = SendMessagePacket::new(&"RTSGaming".to_string(), &"AHH! \0You scared me!".to_string());
+    assert!(smp_fail.is_err());
+}
+
+#[test]
+fn send_message_packet_as_bytes() {
+    let mut smp = SendMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
+    assert_eq!(smp.as_bytes(), Bytes::from_static(b"\x0A\0\0\0\x46Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
+
+}
