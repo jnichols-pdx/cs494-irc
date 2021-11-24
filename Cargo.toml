@@ -16,6 +16,7 @@ num_enum = "0.5"
 thiserror = "1.0"
 regex = "1.5"
 lazy_static = "1.4"
+duplicate = "0.3.0"
 
 [[bin]]
 name = "server"

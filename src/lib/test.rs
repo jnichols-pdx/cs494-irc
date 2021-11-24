@@ -156,7 +156,7 @@ fn file_name_length() {
     assert!(valid_filename(&"™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™XY".to_string()).is_err()); 
 
     //filenames up to and including 1024 bytes in length are OK
-    assert!(valid_filename(&"™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™X".to_string()).is_ok()); //long names are not
+    assert!(valid_filename(&"™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™X".to_string()).is_ok());
 }
 
 
@@ -232,7 +232,7 @@ fn message_length() {
 
 
 
-    //1201 bytes (400 three byte code points,  a null) are NOT ok.
+    //1201 bytes (400 three byte code points,  a null) and more are NOT ok.
     assert!(valid_message(&"™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™™\0".to_string()).is_err());
 
 
@@ -1193,6 +1193,7 @@ fn post_message() {
     assert_eq!(pmp.message, "This should be good.\0");
     assert_eq!(pmp.get_message(), "This should be good.");
 
+    //Without pre-appending a null to the message
     let mut pmpwrap = PostMessagePacket::new(&"RTSGaming".to_string(), &"SCV429".to_string(), &"AHH! You scared me!".to_string());
     assert!(pmpwrap.is_ok());
     let pmp = pmpwrap.unwrap();
@@ -1209,5 +1210,227 @@ fn post_message() {
 fn post_message_packet_as_bytes() {
     let mut pmp = PostMessagePacket::new(&"Channel42".to_string(), &"New_User".to_string(), &"Hello".to_string()).unwrap();
     assert_eq!(pmp.as_bytes(), Bytes::from_static(b"\x0C\0\0\0\x86Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0New_User\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
+
+}
+
+///////////////////////////////////////////////
+//  Direct Message Packet
+///////////////////////////////////////////////
+
+#[test]
+fn direct_message_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(91);
+    bytes_good.put_u8( IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
+    bytes_good.put_u32(86);
+
+    bytes_good.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_slice("Dude, where'd you go?\0".as_bytes());
+
+    let dmp_good = DirectMessagePacket::from_bytes(&bytes_good);
+    assert!(dmp_good.is_ok());
+    let dmp = dmp_good.unwrap();
+    assert_eq!(dmp.get_message(), "Dude, where'd you go?".to_string());
+
+    let mut bytes_short = BytesMut::with_capacity(81);
+    bytes_short.put_u8( IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
+    bytes_short.put_u32(76);
+    bytes_short.put_slice("PSU".as_bytes());
+    let remain = 60 - "PSU".len(); //TOO SHORT
+    bytes_short.put_bytes(b'\0', remain);
+    bytes_short.put_slice(b"messagebody\0");
+
+    let dmp_bad_short = DirectMessagePacket::from_bytes(&bytes_short);
+    assert!(dmp_bad_short.is_err());
+    if let Err(e) = dmp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,81) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(145);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice("News&Rumours".as_bytes());
+    let remain = 64 - "News&Rumours".len();
+    bytes_lenf.put_bytes(b'\0',64);
+    bytes_lenf.put_slice(b"Our records show your car's warranty is almost expired! If you'd like to...\0");
+
+    let dmp_bad_lenf = DirectMessagePacket::from_bytes(&bytes_lenf);
+    assert!(dmp_bad_lenf.is_err());
+    if let Err(e) = dmp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,145) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(73);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(68);
+    bytes_mismatch.put_slice("Cars".as_bytes());
+    let remain = 64 - "Cars".len();
+    bytes_mismatch.put_bytes(b'\0',64);
+    bytes_mismatch.put_slice("yo!\0".as_bytes());
+
+    let dmp_bad_mismatch = DirectMessagePacket::from_bytes(&bytes_mismatch);
+    assert!(dmp_bad_mismatch.is_err());
+    if let Err(e) = dmp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn direct_message() {
+    let dmpwrap = DirectMessagePacket::new(&"RTSGaming".to_string(), &"This should be good.\0".to_string());
+    assert!(dmpwrap.is_ok());
+    let dmp = dmpwrap.unwrap();
+    assert_eq!(dmp.room, "RTSGaming");
+    assert_eq!(dmp.message, "This should be good.\0");
+    assert_eq!(dmp.get_message(), "This should be good.");
+
+    let mut dmpwrap = DirectMessagePacket::new(&"RTSGaming".to_string(), &"AHH! You scared me!".to_string());
+    assert!(dmpwrap.is_ok());
+    let dmp = dmpwrap.unwrap();
+    assert_eq!(dmp.room, "RTSGaming");
+    assert_eq!(dmp.message, "AHH! You scared me!\0");
+    assert_eq!(dmp.get_message(), "AHH! You scared me!");
+
+    let mut dmp_fail = DirectMessagePacket::new(&"RTSGaming".to_string(), &"AHH! \0You scared me!".to_string());
+    assert!(dmp_fail.is_err());
+}
+
+#[test]
+fn direct_message_packet_as_bytes() {
+    let mut dmp = DirectMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
+    assert_eq!(dmp.as_bytes(), Bytes::from_static(b"\x0D\0\0\0\x46Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
+
+}
+
+///////////////////////////////////////////////
+//  Offer File Packet
+///////////////////////////////////////////////
+
+#[test]
+fn offer_file_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(91);
+    bytes_good.put_u8( IrcKind::IRC_KIND_OFFER_FILE as u8);
+    bytes_good.put_u32(145);
+
+//to,from,id,size,filename
+//Frank, Bob, 0, 512, example.txt  < 11 bytes , 64+64+2+4+11 = 145
+
+    bytes_good.put_slice("Frank".as_bytes());
+    let remain = 64 - "Frank".len();
+    bytes_good.put_bytes(b'\0', remain);
+
+    bytes_good.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_u16(0);
+    bytes_good.put_u32(512);
+    bytes_good.put_slice("example.txt".as_bytes());
+
+    let ofp_good = OfferFilePacket::from_bytes(&bytes_good);
+    if let Err(e) = &ofp_good {
+        println!("{:?}",e);
+    }
+    assert!(ofp_good.is_ok());
+    let ofp = ofp_good.unwrap();
+    assert_eq!(ofp.get_file_name(), "example.txt".to_string());
+
+
+    let mut bytes_short = BytesMut::with_capacity(81);
+    bytes_short.put_u8( IrcKind::IRC_KIND_OFFER_FILE as u8);
+    bytes_short.put_u32(145);
+    bytes_short.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_short.put_bytes(b'\0', remain);
+
+    bytes_short.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_short.put_bytes(b'\0', remain);
+
+    bytes_short.put_u16(0);
+    bytes_short.put_u32(512);
+    bytes_short.put_slice("example.txt".as_bytes());
+
+    let ofp_bad_short = OfferFilePacket::from_bytes(&bytes_short);
+    assert!(ofp_bad_short.is_err());
+    if let Err(e) = ofp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,_) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(145);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_OFFER_FILE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+
+    bytes_lenf.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_lenf.put_bytes(b'\0', remain);
+
+    bytes_lenf.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_lenf.put_bytes(b'\0', remain);
+
+    bytes_lenf.put_u16(0);
+    bytes_lenf.put_u32(512);
+    bytes_lenf.put_slice("example.txt".as_bytes());
+
+    let ofp_bad_lenf = OfferFilePacket::from_bytes(&bytes_lenf);
+    assert!(ofp_bad_lenf.is_err());
+    if let Err(e) = ofp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,145) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+
+    let mut bytes_mismatch= BytesMut::with_capacity(73);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(145);
+    bytes_mismatch.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_mismatch.put_bytes(b'\0', remain);
+
+    bytes_mismatch.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_mismatch.put_bytes(b'\0', remain);
+
+    bytes_mismatch.put_u16(0);
+    bytes_mismatch.put_u32(512);
+    bytes_mismatch.put_slice("example.txt".as_bytes());
+
+    let ofp_bad_mismatch = OfferFilePacket::from_bytes(&bytes_mismatch);
+    assert!(ofp_bad_mismatch.is_err());
+    if let Err(e) = ofp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn offer_file() {
+    let ofpwrap = OfferFilePacket::new(&"Frank".to_string(), &"Bob".to_string(), 512, &"Example.txt".to_string());
+    assert!(ofpwrap.is_ok());
+    let ofp = ofpwrap.unwrap();
+    assert_eq!(ofp.get_to(), "Frank");
+    assert_eq!(ofp.get_from(), "Bob");
+    assert_eq!(ofp.get_size(), 512);
+    assert_eq!(ofp.get_file_name(), "Example.txt");
+
+    let mut ofp_fail = OfferFilePacket::new(&"Frank".to_string(), &"Bob".to_string(), 512, &"Exa:mple.txt".to_string());
+    assert!(ofp_fail.is_err());
+}
+
+#[test]
+fn offer_file_packet_as_bytes() {
+    let mut ofp = OfferFilePacket::new(&"Frank".to_string(), &"Bob".to_string(), 512, &"example.txt".to_string()).unwrap();
+    assert_eq!(ofp.as_bytes(), Bytes::from_static(b"\x0E\0\0\0\x96Frank\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Bob\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x00\x00\0\0\x02\x00example.txt"));
 
 }

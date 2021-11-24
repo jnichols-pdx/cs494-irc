@@ -2,6 +2,8 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 
+
+
 //use num_derive::FromPrimitive;
 //use num_traits::FromPrimitive;
 use num_enum::FromPrimitive;
@@ -11,6 +13,7 @@ use thiserror::Error;
 use std::io;
 use lazy_static::lazy_static;
 use regex::Regex;
+use duplicate::duplicate;
 
 /// Result type for IRC  errors.
 pub type Result<'a, T> = std::result::Result<T, IrcError>;
@@ -132,7 +135,7 @@ impl From<std::str::Utf8Error> for IrcError {
 
 
 ///////////////////////////////////////////////
-// UTIL funcs
+// UTILITY functions
 ///////////////////////////////////////////////
 
 
@@ -140,7 +143,7 @@ pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
     //NAMES
     //must be 64 bytes or less in utf-8 encoding,
     //must be more than 0 and less than 32 codepoints,
-    //must not have 0x00-0x1f (low ascii command codes),
+    //must not have 0x00-0x1f (low ascii control codes),
     //must not have 0x20 (space character)
     //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
 
@@ -172,7 +175,7 @@ pub fn valid_message<'a>(message: &'a String) -> Result<&'a String> {
     //MESSAGES
     //must be 12000 bytes or less in utf-8 encoding,
     //must be more than 0 codepoints,
-    //must not have 0x00-0x19 (low ascii command codes),
+    //must not have 0x00-0x19 (low ascii control codes),
     //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
     //must have \00 as the final byte.
 
@@ -209,7 +212,7 @@ pub fn valid_filename<'a>(file_name: &'a String) -> Result<&'a String> {
     //FILE NAMES
     //may be up to 1024 bytes in utf-8 encoding,
     //must be more than 0 codepoints,
-    //must not have 0x00-0x19 (low ascii command codes),
+    //must not have 0x00-0x19 (low ascii control codes),
     //must not have 0x202A-0x202E, 0x2066-0x2069, 0x200E, 0x200F or 0x061C (directional codes)
     //must not have 0x003A or 0x002F (file system path delimiters ':' and '/')
 
@@ -245,6 +248,14 @@ pub fn get_four_bytes_as_array(source: &[u8]) -> [u8;4] {
 
 pub fn u32_from_slice(source: &[u8]) -> u32 {
     u32::from_be_bytes(get_four_bytes_as_array(&source[0..4]))
+}
+
+pub fn get_two_bytes_as_array(source: &[u8]) -> [u8;2] {
+   source.try_into().expect("Slice with incorrect length.")
+}
+
+pub fn u16_from_slice(source: &[u8]) -> u16 {
+    u16::from_be_bytes(get_two_bytes_as_array(&source[0..2]))
 }
 
 pub fn get_sixtyfour_bytes_as_array(source: &[u8]) -> [u8;64] {
@@ -1086,6 +1097,313 @@ impl IrcPacket for PostMessagePacket {
     }
 }
 
+///////////////////////////////////////////////
+// Direct Message Packet
+///////////////////////////////////////////////
+
+pub struct DirectMessagePacket{
+    pub room: String,
+    pub message: String,
+}
+
+impl DirectMessagePacket {
+
+    pub fn new<'x>(to_room: &String, message: &String) -> Result<'x, DirectMessagePacket> {
+            let v_room = valid_name(to_room)?;
+            let mut v_message;
+            if message.ends_with('\0') {
+                v_message = valid_message(&message)?.to_owned();
+            } else {
+                v_message = message.to_owned();
+                v_message.push('\0');
+                v_message = valid_message(&v_message)?.to_owned();
+            }
+            Ok(DirectMessagePacket {
+                    room: v_room.to_owned(),
+                    message: v_message.to_owned(),
+                })
+    }
+
+    pub fn get_message(&self) -> String {
+        let mut outgoing = self.message.clone();
+        outgoing.pop().unwrap();
+        outgoing
+    }
+
+}
+
+impl IrcPacket for DirectMessagePacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let message_bytelength = self.message.len();
+        let mut bytes_out = BytesMut::with_capacity(5+64+(message_bytelength as usize));
+        bytes_out.put_u8( IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
+        bytes_out.put_u32(64+(message_bytelength as u32));
+        bytes_out.put_slice(&self.room.as_bytes());
+        let remain = 64 - self.room.len();
+        bytes_out.put_bytes(b'\0', remain);
+        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_DIRECT_MESSAGE {
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length : usize = u32_from_slice(&source[1..5]) as usize;
+
+        if length < 70 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        if source.len() != length + 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), length + 5));
+        }
+
+        let new_room: String = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
+
+        let new_message = valid_message(&String::from_utf8(source[69..].to_vec())?)?.to_string();
+
+        Ok(DirectMessagePacket {
+          room: new_room,
+          message: new_message,
+        })
+    }
+}
+
+///////////////////////////////////////////////
+// FILE TRANSFER PACKETS
+///////////////////////////////////////////////
+
+pub struct TransferCore{
+    pub recipient: String,
+    pub sender: String,
+    pub transfer_id: u16,
+    pub file_size: u32,
+    pub file_name: String,
+}
+
+pub struct OfferFilePacket{
+    core: TransferCore,
+}
+
+pub struct AcceptFilePacket{
+    core: TransferCore,
+}
+
+pub struct RejectFilePacket{
+    core: TransferCore,
+}
+
+impl TransferCore {
+
+    pub fn new<'x>(to_user: &String, from_user: &String, size: u32, file_name: &String) -> Result<'x, TransferCore>{
+        let v_recipient = valid_name(&to_user)?;
+        let v_sender = valid_name(&from_user)?;
+        let v_file_name= valid_filename(&file_name)?.to_owned();
+
+        Ok(TransferCore{
+                recipient: v_recipient.to_owned(),
+                sender: v_sender.to_owned(),
+                transfer_id: 0,
+                file_size: size,
+                file_name: v_file_name.to_owned(),
+            })
+    }
+
+    pub fn set_id(&mut self, new_id: u16) {
+       self.transfer_id = new_id;
+    }
+
+    pub fn byte_length(&self) -> usize {
+        let filename_bytelength = self.file_name.len();
+        return 64+64+2+4+filename_bytelength;
+    }
+
+    fn as_bytes(&self) -> BytesMut {
+        let content_length = self.byte_length();
+        let mut bytes_out = BytesMut::with_capacity(content_length);
+
+        bytes_out.put_slice(&self.recipient.as_bytes());
+        let remain = 64 - self.recipient.len();
+        bytes_out.put_bytes(b'\0', remain);
+
+        bytes_out.put_slice(&self.sender.as_bytes());
+        let remain = 64 - self.sender.len();
+        bytes_out.put_bytes(b'\0', remain);
+
+        bytes_out.put_u16(self.transfer_id);
+
+        bytes_out.put_u32(self.file_size);
+
+        bytes_out.put_slice(&self.file_name.as_bytes());
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> { //expects kind to still exist at front of buffer
+        let kind_raw= IrcKind::from(source[0]);
+        match kind_raw {
+            IrcKind::IRC_KIND_OFFER_FILE | IrcKind::IRC_KIND_REJECT_FILE | IrcKind::IRC_KIND_ACCEPT_FILE => (),
+            _ => return Err(IrcError::PacketMismatch()),
+        };
+
+        let length : usize = u32_from_slice(&source[1..5]) as usize;
+
+        if length < 135 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        if source.len() != length + 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), length + 5));
+        }
+
+        let new_recipient: String = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
+
+        let new_sender: String = valid_name(&name_from_slice(&source[69..133])?)?.to_owned();
+
+        let new_transfer_id = u16_from_slice(&source[133..135]);
+        let new_file_size = u32_from_slice(&source[135..139]);
+        let new_file_name = valid_filename(&String::from_utf8(source[139..].to_vec())?)?.to_string();
+
+        Ok(TransferCore{
+            recipient: new_recipient,
+            sender: new_sender,
+            transfer_id: new_transfer_id,
+            file_size: new_file_size,
+            file_name: new_file_name,
+        })
+    }
+
+
+}
+
+pub trait TransferCoreRead {
+
+    fn get_to(&self) -> String ;
+    fn get_from(&self) -> String ;
+    fn get_file_name(&self) -> String ;
+    fn get_size(&self) -> u32 ;
+    fn get_transfer_id(&self) -> u16 ;
+    fn set_id(&mut self, new_id: u16);
+    fn take_core(self) -> TransferCore;
+}
+
+#[duplicate(
+    transfer_type;
+    [OfferFilePacket];
+    [AcceptFilePacket];
+    [RejectFilePacket];
+)]
+impl TransferCoreRead for transfer_type {
+    fn get_to(&self) -> String {
+        let mut outgoing = self.core.recipient.clone();
+        outgoing
+    }
+
+    fn get_from(&self) -> String {
+        let mut outgoing = self.core.sender.clone();
+        outgoing
+    }
+
+    fn get_file_name(&self) -> String {
+        let mut outgoing = self.core.file_name.clone();
+        outgoing
+    }
+
+    fn get_size(&self) -> u32 {
+        self.core.file_size
+    }
+
+    fn get_transfer_id(&self) -> u16 {
+        self.core.transfer_id
+    }
+
+    fn set_id(&mut self, new_id: u16){
+        self.core.set_id(new_id);
+    }
+
+    fn take_core(self) -> TransferCore {
+        self.core
+    }
+
+}
+
+
+#[duplicate(
+    TRANSFER_TYPE        SPECIFIC_KIND                      PACKET_CLASS;
+    [OfferFilePacket]    [IrcKind::IRC_KIND_OFFER_FILE]     [OfferFilePacket];
+    [AcceptFilePacket]   [IrcKind::IRC_KIND_ACCEPT_FILE]    [AcceptFilePacket];
+    [RejectFilePacket]   [IrcKind::IRC_KIND_REJECT_FILE]    [RejectFilePacket];
+)]
+impl IrcPacket for TRANSFER_TYPE {
+
+    fn as_bytes(&self) -> BytesMut {
+        let content_size = self.core.byte_length();
+        let mut bytes_out = BytesMut::with_capacity(5+content_size);
+        bytes_out.put_u8( SPECIFIC_KIND as u8);
+        bytes_out.put_u32(5+content_size as u32);
+        bytes_out.put_slice(&self.core.as_bytes());
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != SPECIFIC_KIND{
+            return Err(IrcError::PacketMismatch());
+        }
+
+        Ok(PACKET_CLASS {
+          core: TransferCore::from_bytes(source)?,
+        })
+    }
+}
+
+impl OfferFilePacket {
+
+    pub fn new<'x>(to_user: &String, from_user: &String, size: u32, file_name: &String) -> Result<'x, OfferFilePacket>{
+            Ok(OfferFilePacket {
+                    core: TransferCore::new(to_user, from_user, size, file_name)?,
+                })
+    }
+}
+
+impl AcceptFilePacket {
+
+    pub fn new<'x>(to_user: &String, from_user: &String, transfer_id: u16,  size: u32, file_name: &String) -> Result<'x, AcceptFilePacket>{
+            let mut new_core = TransferCore::new(to_user, from_user, size, file_name)?;
+            new_core.set_id(transfer_id);
+            Ok(AcceptFilePacket{
+                    core: new_core,
+                })
+    }
+
+    pub fn from_offer<'x>(source: OfferFilePacket) -> Result<'x, AcceptFilePacket>{
+            Ok(AcceptFilePacket{
+                core: source.take_core(),
+            })
+    }
+}
+
+impl RejectFilePacket {
+
+    pub fn new<'x>(to_user: &String, from_user: &String, transfer_id: u16,  size: u32, file_name: &String) -> Result<'x, RejectFilePacket>{
+            let mut new_core = TransferCore::new(to_user, from_user, size, file_name)?;
+            new_core.set_id(transfer_id);
+            Ok(RejectFilePacket{
+                    core: new_core,
+                })
+    }
+
+    pub fn from_offer<'x>(source: OfferFilePacket) -> Result<'x, RejectFilePacket>{
+            Ok(RejectFilePacket{
+                core: source.take_core(),
+            })
+    }
+}
+
+
 #[cfg(test)]
 #[path = "./lib/test.rs"]
-mod irclib;
+mod irclib; //really the name of the block of tests we import into this file. The *name* of this library is set in Cargo.toml
