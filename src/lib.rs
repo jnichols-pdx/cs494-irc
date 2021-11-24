@@ -1174,7 +1174,7 @@ impl IrcPacket for DirectMessagePacket {
 }
 
 ///////////////////////////////////////////////
-// FILE TRANSFER PACKETS
+// FILE TRANSFER HANDSHAKE PACKETS
 ///////////////////////////////////////////////
 
 pub struct TransferCore{
@@ -1400,6 +1400,77 @@ impl RejectFilePacket {
             Ok(RejectFilePacket{
                 core: source.take_core(),
             })
+    }
+}
+
+///////////////////////////////////////////////
+// File Transfer Packet
+///////////////////////////////////////////////
+
+pub struct FileTransferPacket{
+    pub transfer_id: u16,
+    pub finished: bool,
+    pub data: Bytes,
+}
+
+impl FileTransferPacket {
+
+    pub fn new<'x>(transfer_id: u16, finished: bool, data: Bytes) -> Result<'x, FileTransferPacket> {
+            if data.len() > 4096 {
+                return Err(IrcError::TooManyBytes(data.len(),4096));
+            }
+            if data.len() == 0 {
+                return Err(IrcError::InvalidEmpty());
+            }
+
+            Ok(FileTransferPacket {
+                    transfer_id: transfer_id,
+                    finished: finished,
+                    data: data,
+                })
+    }
+
+}
+
+impl IrcPacket for FileTransferPacket {
+
+    fn as_bytes(&self) -> BytesMut {
+        let bytelength = self.data.len();
+        let mut bytes_out = BytesMut::with_capacity(5+2+1+bytelength);
+        bytes_out.put_u8( IrcKind::IRC_KIND_FILE_TRANSFER as u8);
+        bytes_out.put_u32(3+bytelength as u32);
+        bytes_out.put_u16(self.transfer_id);
+        bytes_out.put_u8(self.finished as u8);
+        bytes_out.put_slice(&self.data);
+        bytes_out
+    }
+
+    fn from_bytes(source: &[u8] ) -> Result<Self> {
+        let kind_raw= IrcKind::from(source[0]);
+        if kind_raw != IrcKind::IRC_KIND_FILE_TRANSFER {
+            return Err(IrcError::PacketMismatch());
+        }
+
+        let length : usize = u32_from_slice(&source[1..5]) as usize;
+
+        if length < 4 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+
+        if source.len() != length + 5 {
+            return Err(IrcError::PacketLengthIncorrect(source.len(), length + 5));
+        }
+
+        let new_transfer_id = u16_from_slice(&source[5..7]);
+        let new_finished =&source[7] > &0; 
+
+        let new_data : Bytes = Bytes::copy_from_slice(&source[8..]);
+
+        Ok(FileTransferPacket {
+            transfer_id: new_transfer_id,
+            finished: new_finished,
+            data: new_data,
+        })
     }
 }
 

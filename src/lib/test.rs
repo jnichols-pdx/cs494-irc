@@ -1432,5 +1432,337 @@ fn offer_file() {
 fn offer_file_packet_as_bytes() {
     let mut ofp = OfferFilePacket::new(&"Frank".to_string(), &"Bob".to_string(), 512, &"example.txt".to_string()).unwrap();
     assert_eq!(ofp.as_bytes(), Bytes::from_static(b"\x0E\0\0\0\x96Frank\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Bob\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x00\x00\0\0\x02\x00example.txt"));
+}
+
+///////////////////////////////////////////////
+//  Accept File Packet
+///////////////////////////////////////////////
+
+#[test]
+fn accept_file_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(91);
+    bytes_good.put_u8( IrcKind::IRC_KIND_ACCEPT_FILE as u8);
+    bytes_good.put_u32(145);
+
+//to,from,id,size,filename
+//Frank, Bob, 0, 512, example.txt  < 11 bytes , 64+64+2+4+11 = 145
+
+    bytes_good.put_slice("Frank".as_bytes());
+    let remain = 64 - "Frank".len();
+    bytes_good.put_bytes(b'\0', remain);
+
+    bytes_good.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_u16(11);
+    bytes_good.put_u32(512);
+    bytes_good.put_slice("example.txt".as_bytes());
+
+    let afp_good = AcceptFilePacket::from_bytes(&bytes_good);
+    if let Err(e) = &afp_good {
+        println!("{:?}",e);
+    }
+    assert!(afp_good.is_ok());
+    let afp = afp_good.unwrap();
+    assert_eq!(afp.get_file_name(), "example.txt".to_string());
+
+
+    let mut bytes_short = BytesMut::with_capacity(81);
+    bytes_short.put_u8( IrcKind::IRC_KIND_ACCEPT_FILE as u8);
+    bytes_short.put_u32(145);
+    bytes_short.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_short.put_bytes(b'\0', remain);
+
+    bytes_short.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_short.put_bytes(b'\0', remain);
+
+    bytes_short.put_u16(11);
+    bytes_short.put_u32(512);
+    bytes_short.put_slice("example.txt".as_bytes());
+
+    let afp_bad_short = AcceptFilePacket::from_bytes(&bytes_short);
+    assert!(afp_bad_short.is_err());
+    if let Err(e) = afp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,_) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(145);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_ACCEPT_FILE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+
+    bytes_lenf.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_lenf.put_bytes(b'\0', remain);
+
+    bytes_lenf.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_lenf.put_bytes(b'\0', remain);
+
+    bytes_lenf.put_u16(11);
+    bytes_lenf.put_u32(512);
+    bytes_lenf.put_slice("example.txt".as_bytes());
+
+    let afp_bad_lenf = AcceptFilePacket::from_bytes(&bytes_lenf);
+    assert!(afp_bad_lenf.is_err());
+    if let Err(e) = afp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,145) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+
+    let mut bytes_mismatch= BytesMut::with_capacity(73);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(145);
+    bytes_mismatch.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_mismatch.put_bytes(b'\0', remain);
+
+    bytes_mismatch.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_mismatch.put_bytes(b'\0', remain);
+
+    bytes_mismatch.put_u16(11);
+    bytes_mismatch.put_u32(512);
+    bytes_mismatch.put_slice("example.txt".as_bytes());
+
+    let afp_bad_mismatch = AcceptFilePacket::from_bytes(&bytes_mismatch);
+    assert!(afp_bad_mismatch.is_err());
+    if let Err(e) = afp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn accept_file() {
+    let afpwrap = AcceptFilePacket::new(&"Frank".to_string(), &"Bob".to_string(), 11, 512, &"Example.txt".to_string());
+    assert!(afpwrap.is_ok());
+    let afp = afpwrap.unwrap();
+    assert_eq!(afp.get_to(), "Frank");
+    assert_eq!(afp.get_from(), "Bob");
+    assert_eq!(afp.get_transfer_id(), 11);
+    assert_eq!(afp.get_size(), 512);
+    assert_eq!(afp.get_file_name(), "Example.txt");
+
+    let mut afp_fail = AcceptFilePacket::new(&"Frank".to_string(), &"Bob".to_string(),11,  512, &"Exa:mple.txt".to_string());
+    assert!(afp_fail.is_err());
+}
+
+#[test]
+fn accept_file_packet_as_bytes() {
+    let mut afp = AcceptFilePacket::new(&"Frank".to_string(), &"Bob".to_string(),11, 512, &"example.txt".to_string()).unwrap();
+    assert_eq!(afp.as_bytes(), Bytes::from_static(b"\x0F\0\0\0\x96Frank\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Bob\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x00\x0B\0\0\x02\x00example.txt"));
+}
+
+///////////////////////////////////////////////
+//  Reject File Packet
+///////////////////////////////////////////////
+
+#[test]
+fn reject_file_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(91);
+    bytes_good.put_u8( IrcKind::IRC_KIND_REJECT_FILE as u8);
+    bytes_good.put_u32(145);
+
+//to,from,id,size,filename
+//Frank, Bob, 0, 512, example.txt  < 11 bytes , 64+64+2+4+11 = 145
+
+    bytes_good.put_slice("Frank".as_bytes());
+    let remain = 64 - "Frank".len();
+    bytes_good.put_bytes(b'\0', remain);
+
+    bytes_good.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_good.put_bytes(b'\0', remain);
+    bytes_good.put_u16(11);
+    bytes_good.put_u32(512);
+    bytes_good.put_slice("example.txt".as_bytes());
+
+    let rfp_good = RejectFilePacket::from_bytes(&bytes_good);
+    if let Err(e) = &rfp_good {
+        println!("{:?}",e);
+    }
+    assert!(rfp_good.is_ok());
+    let rfp = rfp_good.unwrap();
+    assert_eq!(rfp.get_file_name(), "example.txt".to_string());
+
+
+    let mut bytes_short = BytesMut::with_capacity(81);
+    bytes_short.put_u8( IrcKind::IRC_KIND_REJECT_FILE as u8);
+    bytes_short.put_u32(145);
+    bytes_short.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_short.put_bytes(b'\0', remain);
+
+    bytes_short.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_short.put_bytes(b'\0', remain);
+
+    bytes_short.put_u16(11);
+    bytes_short.put_u32(512);
+    bytes_short.put_slice("example.txt".as_bytes());
+
+    let rfp_bad_short = RejectFilePacket::from_bytes(&bytes_short);
+    assert!(rfp_bad_short.is_err());
+    if let Err(e) = rfp_bad_short {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketLengthIncorrect(_,_) => true, _ => false });
+    };
+
+    let mut bytes_lenf= BytesMut::with_capacity(145);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_REJECT_FILE as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+
+    bytes_lenf.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_lenf.put_bytes(b'\0', remain);
+
+    bytes_lenf.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_lenf.put_bytes(b'\0', remain);
+
+    bytes_lenf.put_u16(11);
+    bytes_lenf.put_u32(512);
+    bytes_lenf.put_slice("example.txt".as_bytes());
+
+    let rfp_bad_lenf = RejectFilePacket::from_bytes(&bytes_lenf);
+    assert!(rfp_bad_lenf.is_err());
+    if let Err(e) = rfp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,145) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+
+    let mut bytes_mismatch= BytesMut::with_capacity(73);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(145);
+    bytes_mismatch.put_slice("Frank".as_bytes());
+    let remain = 60 - "Frank".len(); //too short
+    bytes_mismatch.put_bytes(b'\0', remain);
+
+    bytes_mismatch.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_mismatch.put_bytes(b'\0', remain);
+
+    bytes_mismatch.put_u16(11);
+    bytes_mismatch.put_u32(512);
+    bytes_mismatch.put_slice("example.txt".as_bytes());
+
+    let rfp_bad_mismatch = RejectFilePacket::from_bytes(&bytes_mismatch);
+    assert!(rfp_bad_mismatch.is_err());
+    if let Err(e) = rfp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn reject_file() {
+    let rfpwrap = RejectFilePacket::new(&"Frank".to_string(), &"Bob".to_string(), 11, 512, &"Example.txt".to_string());
+    assert!(rfpwrap.is_ok());
+    let rfp = rfpwrap.unwrap();
+    assert_eq!(rfp.get_to(), "Frank");
+    assert_eq!(rfp.get_from(), "Bob");
+    assert_eq!(rfp.get_transfer_id(), 11);
+    assert_eq!(rfp.get_size(), 512);
+    assert_eq!(rfp.get_file_name(), "Example.txt");
+
+    let mut rfp_fail = RejectFilePacket::new(&"Frank".to_string(), &"Bob".to_string(),11,  512, &"Exa:mple.txt".to_string());
+    assert!(rfp_fail.is_err());
+}
+
+#[test]
+fn reject_file_packet_as_bytes() {
+    let mut rfp = RejectFilePacket::new(&"Frank".to_string(), &"Bob".to_string(),11, 512, &"example.txt".to_string()).unwrap();
+    assert_eq!(rfp.as_bytes(), Bytes::from_static(b"\x10\0\0\0\x96Frank\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Bob\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\x00\x0B\0\0\x02\x00example.txt"));
+}
+
+///////////////////////////////////////////////
+//  File Transfer Packet
+///////////////////////////////////////////////
+
+#[test]
+fn file_transfer_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(91);
+    bytes_good.put_u8( IrcKind::IRC_KIND_FILE_TRANSFER as u8);
+    bytes_good.put_u32(24);
+    bytes_good.put_u16(65534);
+    bytes_good.put_u8(0);
+    bytes_good.put_slice(b"Dude, where'd you go?");
+
+    let ftp_good = FileTransferPacket::from_bytes(&bytes_good);
+    if let Err(e) = &ftp_good {
+        println!("{:?}", e);
+    }
+    assert!(ftp_good.is_ok());
+    let ftp = ftp_good.unwrap();
+    assert!(ftp.transfer_id == 65534);
+    assert!(ftp.finished == false);
+    assert_eq!(ftp.data, Bytes::from_static(b"Dude, where'd you go?"));
+
+    let mut bytes_good_end = BytesMut::with_capacity(91);
+    bytes_good_end.put_u8( IrcKind::IRC_KIND_FILE_TRANSFER as u8);
+    bytes_good_end.put_u32(18);
+    bytes_good_end.put_u16(604);
+    bytes_good_end.put_u8(1);
+    bytes_good_end.put_slice(b"To Albuquerque!");
+
+    let ftp_good_end = FileTransferPacket::from_bytes(&bytes_good_end);
+    if let Err(e) = &ftp_good_end {
+        println!("{:?}", e);
+    }
+    assert!(ftp_good_end.is_ok());
+    let ftp_end = ftp_good_end.unwrap();
+    assert!(ftp_end.transfer_id == 604);
+    assert!(ftp_end.finished == true);
+    assert_eq!(ftp_end.data, Bytes::from_static(b"To Albuquerque!"));
+
+    let mut bytes_lenf= BytesMut::with_capacity(145);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_FILE_TRANSFER as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_u16(13);
+    bytes_lenf.put_u8(0);
+    bytes_lenf.put_slice(b"Our records show your car's warranty is almost expired! If you'd like to...\0");
+
+    let ftp_bad_lenf = FileTransferPacket::from_bytes(&bytes_lenf);
+    assert!(ftp_bad_lenf.is_err());
+    if let Err(e) = ftp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,35) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(73);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(33);
+    bytes_mismatch.put_u16(255);
+    bytes_mismatch.put_u8(1);
+    bytes_mismatch.put_slice("It was not the end, but it was AN end.".as_bytes());
+
+    let ftp_bad_mismatch = FileTransferPacket::from_bytes(&bytes_mismatch);
+    assert!(ftp_bad_mismatch.is_err());
+    if let Err(e) = ftp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn file_transfer_packet_as_bytes() {
+    let mut ftp = FileTransferPacket::new(11, false, Bytes::from_static(b"asdbvadfavasdfasdfijasdifnmalsdikf")).unwrap();
+    assert_eq!(ftp.as_bytes(), Bytes::from_static(b"\x11\0\0\0\x25\x00\x0B\x00asdbvadfavasdfasdfijasdifnmalsdikf"));
+
+    let mut ftp = FileTransferPacket::new(14, true, Bytes::from_static(b"And thus spoke micheal: the end.\"")).unwrap();
+    assert_eq!(ftp.as_bytes(), Bytes::from_static(b"\x11\0\0\0\x24\x00\x0E\x01And thus spoke micheal: the end.\""));
 
 }
