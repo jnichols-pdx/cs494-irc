@@ -1766,3 +1766,137 @@ fn file_transfer_packet_as_bytes() {
     assert_eq!(ftp.as_bytes(), Bytes::from_static(b"\x11\0\0\0\x24\x00\x0E\x01And thus spoke micheal: the end.\""));
 
 }
+
+///////////////////////////////////////////////
+//  Client Departs Packet
+///////////////////////////////////////////////
+
+#[test]
+fn client_departs_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(41);
+    bytes_good.put_u8( IrcKind::IRC_KIND_CLIENT_DEPARTS as u8);
+    bytes_good.put_u32(36);
+    bytes_good.put_slice("So long and thanks for all the fish\0".as_bytes());
+
+    let cdp_good = ClientDepartsPacket::from_bytes(&bytes_good);
+    assert!(cdp_good.is_ok());
+    let cdp = cdp_good.unwrap();
+    assert_eq!(cdp.get_message(), "So long and thanks for all the fish".to_string());
+
+    let mut bytes_lenf= BytesMut::with_capacity(35);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_CLIENT_DEPARTS as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice(b"CALL US to renew your car warranty, before it's too late!!!\0");
+
+    let cdp_bad_lenf = ClientDepartsPacket::from_bytes(&bytes_lenf);
+    assert!(cdp_bad_lenf.is_err());
+    if let Err(e) = cdp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,35) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(16);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(11);
+    bytes_mismatch.put_slice("Piece out!\0".as_bytes());
+
+    let cdp_bad_mismatch = ClientDepartsPacket::from_bytes(&bytes_mismatch);
+    assert!(cdp_bad_mismatch.is_err());
+    if let Err(e) = cdp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn client_departs() {
+    let cdpwrap = ClientDepartsPacket::new(&"This was fun.\0".to_string());
+    assert!(cdpwrap.is_ok());
+    let cdp = cdpwrap.unwrap();
+    assert_eq!(cdp.message, "This was fun.\0");
+    assert_eq!(cdp.get_message(), "This was fun.");
+
+    let mut cdpwrap = ClientDepartsPacket::new(&"Hasta la vista baybee!".to_string());
+    assert!(cdpwrap.is_ok());
+    let cdp = cdpwrap.unwrap();
+    assert_eq!(cdp.message, "Hasta la vista baybee!\0");
+    assert_eq!(cdp.get_message(), "Hasta la vista baybee!");
+
+    let mut cdp_fail = ClientDepartsPacket::new(&"AHH! \0You scared me!".to_string());
+    assert!(cdp_fail.is_err());
+}
+
+#[test]
+fn client_departs_packet_as_bytes() {
+    let mut cdp = ClientDepartsPacket::new(&"Parting is such sweet sorrow".to_string()).unwrap();
+    assert_eq!(cdp.as_bytes(), Bytes::from_static(b"\x12\0\0\0\x1DParting is such sweet sorrow\0"));
+}
+
+///////////////////////////////////////////////
+//  Server Departs Packet
+///////////////////////////////////////////////
+
+#[test]
+fn server_departs_packet_from_bytes() {
+    let mut bytes_good = BytesMut::with_capacity(41);
+    bytes_good.put_u8( IrcKind::IRC_KIND_SERVER_DEPARTS as u8);
+    bytes_good.put_u32(36);
+    bytes_good.put_slice("So long and thanks for all the fish\0".as_bytes());
+
+    let sdp_good = ServerDepartsPacket::from_bytes(&bytes_good);
+    assert!(sdp_good.is_ok());
+    let sdp = sdp_good.unwrap();
+    assert_eq!(sdp.get_message(), "So long and thanks for all the fish".to_string());
+
+    let mut bytes_lenf= BytesMut::with_capacity(35);
+    bytes_lenf.put_u8( IrcKind::IRC_KIND_SERVER_DEPARTS as u8);
+    bytes_lenf.put_u32(30); //wrong length field value
+    bytes_lenf.put_slice(b"CALL US to renew your car warranty, before it's too late!!!\0");
+
+    let sdp_bad_lenf = ServerDepartsPacket::from_bytes(&bytes_lenf);
+    assert!(sdp_bad_lenf.is_err());
+    if let Err(e) = sdp_bad_lenf {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e {IrcError::PacketLengthIncorrect(_,35) => true, IrcError::FieldLengthIncorrect() => true, _ => false });
+    };
+
+    let mut bytes_mismatch= BytesMut::with_capacity(16);
+    bytes_mismatch.put_u8( IrcKind::IRC_KIND_NEW_CLIENT as u8); //wrong type
+    bytes_mismatch.put_u32(11);
+    bytes_mismatch.put_slice("Peace out!\0".as_bytes());
+
+    let sdp_bad_mismatch = ServerDepartsPacket::from_bytes(&bytes_mismatch);
+    assert!(sdp_bad_mismatch.is_err());
+    if let Err(e) = sdp_bad_mismatch {
+        //workaround - unable to derive PartialEq on IrcError as it can contain io::Error which
+        //does NOT implement PartialEq
+        assert!(match e { IrcError::PacketMismatch() => true, _ => false });
+    };
+}
+
+#[test]
+fn server_departs() {
+    let sdpwrap = ServerDepartsPacket::new(&"This was fun.\0".to_string());
+    assert!(sdpwrap.is_ok());
+    let sdp = sdpwrap.unwrap();
+    assert_eq!(sdp.message, "This was fun.\0");
+    assert_eq!(sdp.get_message(), "This was fun.");
+
+    let mut sdpwrap = ServerDepartsPacket::new(&"Hasta la vista baybee!".to_string());
+    assert!(sdpwrap.is_ok());
+    let sdp = sdpwrap.unwrap();
+    assert_eq!(sdp.message, "Hasta la vista baybee!\0");
+    assert_eq!(sdp.get_message(), "Hasta la vista baybee!");
+
+    let mut sdp_fail = ServerDepartsPacket::new(&"AHH! \0You scared me!".to_string());
+    assert!(sdp_fail.is_err());
+}
+
+#[test]
+fn server_departs_packet_as_bytes() {
+    let mut sdp = ServerDepartsPacket::new(&"Server is going down because the admin can't stand any of you any longer!".to_string()).unwrap();
+    assert_eq!(sdp.as_bytes(), Bytes::from_static(b"\x13\0\0\0\x4AServer is going down because the admin can't stand any of you any longer!\0"));
+}
