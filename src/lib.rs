@@ -1310,7 +1310,7 @@ impl IrcPacket for TRANSFER_TYPE {
         let content_size = self.core.byte_length();
         let mut bytes_out = BytesMut::with_capacity(5 + content_size);
         bytes_out.put_u8(SPECIFIC_KIND as u8);
-        bytes_out.put_u32(5 + content_size as u32);
+        bytes_out.put_u32(content_size as u32);
         bytes_out.put_slice(&self.core.as_bytes());
         bytes_out
     }
