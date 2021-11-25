@@ -9,6 +9,11 @@ use std::io::{Write,Read};
 use std::collections::HashMap;
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 
+use ctrlc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+
 
 pub struct Client<'a,'b> {
     pub name: String,
@@ -25,6 +30,13 @@ pub struct Room<'a,'b> {
 
 fn main() -> Result<'static, ()> {
     println!("Hello, world! [server]");
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
+
     let listener = TcpListener::bind("0.0.0.0:17734")?;
 
         let heart = HeartbeatPacket::new()?;
@@ -33,15 +45,29 @@ fn main() -> Result<'static, ()> {
     let mut rooms= HashMap::<String, Room>::new();
 
     for stream in listener.incoming() {
+        if !running.load(Ordering::SeqCst) {
+            //we've been asked to close - so send some cleanup packets!
+
+            let outgoing = ServerDepartsPacket::new(&"Taking a nap, seeya!".to_string())?;
+            for (_,user) in users.iter_mut() {
+                user.connection.write(&outgoing.as_bytes())?;
+                user.connection.shutdown(Shutdown::Both).expect("blah - couldn't say bye");
+            }
+            return Ok(());
+        }
         let mut new_client =  handle_client(stream?)?;
         if users.contains_key(&new_client.name) {
             new_client.connection.write(&ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE)?.as_bytes())?;
             new_client.connection.shutdown(Shutdown::Both)?;
         }else {
             let newbie_name = new_client.name.clone();
+            {
+            spam_user(&mut new_client)?;
+            }
             users.insert(new_client.name.clone(), new_client);
+            let outgoing = PostMessagePacket::new(&"all".to_string(),&newbie_name, &format!("{} has joined the server!", &newbie_name))?;
             for (_,user) in users.iter_mut() {
-                user.connection.write(format!("{} has joined the server!", newbie_name).as_bytes())?;
+                user.connection.write(&outgoing.as_bytes())?;
                 user.connection.write(&heart.as_bytes())?;
             }
         }
@@ -78,4 +104,74 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
     //new_client.connection.write(format!("welcome {}", new_client.name).as_bytes())?;
 
     Ok(new_client)
+}
+
+fn spam_user<'a>(dude: &mut Client) -> Result<'a, ()> {
+
+
+                    let mut ncp = NewClientPacket::new(&"Jeff".into())?;
+                    let mut err1 = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)?;
+                    let mut err2 = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_KIND)?;
+                    let mut err3 = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_LENGTH)?;
+                    let mut err4 = ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE)?;
+                    let mut err5 = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_NAME)?;
+                    let mut err6 = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_MESSAGE)?;
+                    let mut err7 = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER)?;
+                    let mut err8 = ErrorPacket::new(IrcErrCode::IRC_ERR_TOO_MANY_USERS)?;
+                    let mut err9 = ErrorPacket::new(IrcErrCode::IRC_ERR_TOO_MANY_ROOMS)?;
+
+//                    IrcKind::IRC_KIND_HEARTBEAT => {
+
+                    let mut erp = EnterRoomPacket::new(&"r/Politics".into())?;
+                    let mut lrp = LeaveRoomPacket::new(&"r/WorldPeace".into())?;
+                    let mut lip = ListRoomsPacket::new()?;
+                    let mut rlp = RoomListingPacket::new()?;
+                        rlp.push(&"Alpha".into())?;
+                        rlp.push(&"Beta".into())?;
+                        rlp.push(&"Gamma".into())?;
+                    let mut ulp = UserListingPacket::new()?;
+                        ulp.push(&"Ada".into())?;
+                        ulp.push(&"Ben".into())?;
+                        ulp.push(&"Charlie".into())?;
+                    let mut qup = QueryUserPacket::new(&"Pedro".into())?;
+                        qup.set_online();
+                    let mut smp = SendMessagePacket::new(&"r/Politics".into(), &"Things happened today.".into())?;
+                    let mut bmp = BroadcastMessagePacket::new(&"Server announcement: today is taco tuesday!".into())?;
+
+                   // IrcKind::IRC_KIND_POST_MESSAGE => {
+                   
+                    let mut dmp = DirectMessagePacket::new(&"AuntMable".into(), &"So I says to Kathleen, I says to her...".into())?;
+                    let mut ofp = OfferFilePacket::new(&"Your_Sister".into(), &"Your_Mother".into(), 3524, &"Recipe.txt".into())?;
+                    let mut afp = AcceptFilePacket::new(&"Your_Sister".into(), &"Your_Mother".into(), 15, 3524, &"Recipe.txt".into())?;
+                    let mut rfp = RejectFilePacket::new(&"Your_Sister".into(), &"Your_Mother".into(), 15,  3524, &"Recipe.txt".into())?;
+                    let mut ftp = FileTransferPacket::new(15, false, Bytes::from_static(b"Mix dry ingredients in small bowl..."))?;
+                    let mut cdp = ClientDepartsPacket::new(&"Arrivaderci!".into())?;
+                    //IrcKind::IRC_KIND_SERVER_DEPARTS => {
+
+
+                    dude.connection.write(&ncp.as_bytes())?;
+                    dude.connection.write(&err1.as_bytes())?;
+                    dude.connection.write(&err2.as_bytes())?;
+                    dude.connection.write(&err3.as_bytes())?;
+                    dude.connection.write(&err4.as_bytes())?;
+                    dude.connection.write(&err5.as_bytes())?;
+                    dude.connection.write(&err6.as_bytes())?;
+                    dude.connection.write(&err7.as_bytes())?;
+                    dude.connection.write(&err8.as_bytes())?;
+                    dude.connection.write(&err9.as_bytes())?;
+                    dude.connection.write(&erp.as_bytes())?;
+                    dude.connection.write(&lrp.as_bytes())?;
+                    dude.connection.write(&lip.as_bytes())?;
+                    dude.connection.write(&rlp.as_bytes())?;
+                    dude.connection.write(&ulp.as_bytes())?;
+                    dude.connection.write(&qup.as_bytes())?;
+                    dude.connection.write(&smp.as_bytes())?;
+                    dude.connection.write(&bmp.as_bytes())?;
+                    dude.connection.write(&dmp.as_bytes())?;
+                    dude.connection.write(&ofp.as_bytes())?;
+                    dude.connection.write(&afp.as_bytes())?;
+                    dude.connection.write(&rfp.as_bytes())?;
+                    dude.connection.write(&ftp.as_bytes())?;
+                    dude.connection.write(&cdp.as_bytes())?;
+                Ok(())
 }
