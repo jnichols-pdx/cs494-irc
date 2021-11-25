@@ -1070,13 +1070,13 @@ impl IrcPacket for PostMessagePacket {
 ///////////////////////////////////////////////
 
 pub struct DirectMessagePacket {
-    pub room: String,
+    pub target: String,
     pub message: String,
 }
 
 impl DirectMessagePacket {
-    pub fn new<'x>(to_room: &String, message: &String) -> Result<'x, DirectMessagePacket> {
-        let v_room = valid_name(to_room)?;
+    pub fn new<'x>(to_target: &String, message: &String) -> Result<'x, DirectMessagePacket> {
+        let v_target = valid_name(to_target)?;
         let mut v_message;
         if message.ends_with('\0') {
             v_message = valid_message(&message)?.to_owned();
@@ -1086,7 +1086,7 @@ impl DirectMessagePacket {
             v_message = valid_message(&v_message)?.to_owned();
         }
         Ok(DirectMessagePacket {
-            room: v_room.to_owned(),
+            target: v_target.to_owned(),
             message: v_message.to_owned(),
         })
     }
@@ -1104,8 +1104,8 @@ impl IrcPacket for DirectMessagePacket {
         let mut bytes_out = BytesMut::with_capacity(5 + 64 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
         bytes_out.put_u32(64 + (message_bytelength as u32));
-        bytes_out.put_slice(&self.room.as_bytes());
-        let remain = 64 - self.room.len();
+        bytes_out.put_slice(&self.target.as_bytes());
+        let remain = 64 - self.target.len();
         bytes_out.put_bytes(b'\0', remain);
         bytes_out.put_slice(&self.message.as_bytes());
         bytes_out
@@ -1127,12 +1127,12 @@ impl IrcPacket for DirectMessagePacket {
             return Err(IrcError::PacketLengthIncorrect(source.len(), length + 5));
         }
 
-        let new_room: String = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
+        let new_target: String = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
 
         let new_message = valid_message(&String::from_utf8(source[69..].to_vec())?)?.to_string();
 
         Ok(DirectMessagePacket {
-            room: new_room,
+            target: new_target,
             message: new_message,
         })
     }

@@ -1292,8 +1292,8 @@ fn direct_message_packet_from_bytes() {
     bytes_good.put_u8(IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
     bytes_good.put_u32(86);
 
-    bytes_good.put_slice("Bob's_room".as_bytes());
-    let remain = 64 - "Bob's_room".len();
+    bytes_good.put_slice("Bob's_target".as_bytes());
+    let remain = 64 - "Bob's_target".len();
     bytes_good.put_bytes(b'\0', remain);
     bytes_good.put_slice("Dude, where'd you go?\0".as_bytes());
 
@@ -1371,7 +1371,7 @@ fn direct_message() {
     );
     assert!(dmpwrap.is_ok());
     let dmp = dmpwrap.unwrap();
-    assert_eq!(dmp.room, "RTSGaming");
+    assert_eq!(dmp.target, "RTSGaming");
     assert_eq!(dmp.message, "This should be good.\0");
     assert_eq!(dmp.get_message(), "This should be good.");
 
@@ -1379,7 +1379,7 @@ fn direct_message() {
         DirectMessagePacket::new(&"RTSGaming".to_string(), &"AHH! You scared me!".to_string());
     assert!(dmpwrap.is_ok());
     let dmp = dmpwrap.unwrap();
-    assert_eq!(dmp.room, "RTSGaming");
+    assert_eq!(dmp.target, "RTSGaming");
     assert_eq!(dmp.message, "AHH! You scared me!\0");
     assert_eq!(dmp.get_message(), "AHH! You scared me!");
 
