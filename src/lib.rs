@@ -9,6 +9,7 @@ use num_enum::FromPrimitive;
 use regex::Regex;
 use std::convert::{TryFrom, TryInto};
 use std::io;
+use std::fmt;
 use thiserror::Error;
 
 /// Result type for IRC  errors.
@@ -762,6 +763,17 @@ pub enum UserStatus {
 
     #[num_enum(default)]
     NO_MATCH_USER_STATUS,
+}
+
+impl fmt::Display for UserStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+       match *self {
+        UserStatus::Online => write!(f, "Online"),
+        UserStatus::Offline => write!(f, "Offline"),
+        UserStatus::Request => write!(f, "Status Requested"),
+        UserStatus::NO_MATCH_USER_STATUS => write!(f, "Unknown"),
+       }
+    }
 }
 
 pub struct QueryUserPacket {
