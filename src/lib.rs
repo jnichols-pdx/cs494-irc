@@ -341,7 +341,7 @@ pub struct SyncSendPack {
     pub afp: Option<AcceptFilePacket>,
     pub rfp: Option<RejectFilePacket>,
     pub ftp: Option<FileTransferPacket>,
-    pub cpd: Option<ClientDepartsPacket>,
+    pub cdp: Option<ClientDepartsPacket>,
     pub sdp: Option<ServerDepartsPacket>,
 }
 
@@ -366,7 +366,7 @@ impl From<ErrorPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -393,7 +393,7 @@ impl From<NewClientPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -420,7 +420,7 @@ impl From<HeartbeatPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -447,7 +447,7 @@ impl From<EnterRoomPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -474,7 +474,7 @@ impl From<LeaveRoomPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -501,7 +501,7 @@ impl From<ListRoomsPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -528,7 +528,7 @@ impl From<RoomListingPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -555,7 +555,7 @@ impl From<UserListingPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -582,7 +582,7 @@ impl From<QueryUserPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -609,7 +609,7 @@ impl From<SendMessagePacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -636,7 +636,7 @@ impl From<BroadcastMessagePacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -663,7 +663,7 @@ impl From<PostMessagePacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -690,7 +690,7 @@ impl From<DirectMessagePacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -717,7 +717,7 @@ impl From<OfferFilePacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -744,7 +744,7 @@ impl From<AcceptFilePacket> for SyncSendPack {
             afp: Some(packet_in),
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -771,7 +771,7 @@ impl From<RejectFilePacket> for SyncSendPack {
             afp: None,
             rfp: Some(packet_in),
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -798,7 +798,7 @@ impl From<FileTransferPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: Some(packet_in),
-            cpd: None,
+            cdp: None,
             sdp: None,
         }
     }
@@ -825,7 +825,7 @@ impl From<ClientDepartsPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: Some(packet_in),
+            cdp: Some(packet_in),
             sdp: None,
         }
     }
@@ -852,7 +852,7 @@ impl From<ServerDepartsPacket> for SyncSendPack {
             afp: None,
             rfp: None,
             ftp: None,
-            cpd: None,
+            cdp: None,
             sdp: Some(packet_in),
         }
     }
