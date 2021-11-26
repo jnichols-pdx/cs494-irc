@@ -56,58 +56,79 @@ async fn main() -> Result<'static, ()>{
     let my_ident = NewClientPacket::new(&my_name)?;
     con.write(&my_ident.as_bytes()).await?;
 
-    //thread to thread communication channel
-    let (tx_to_ui, mut ui_rx) = mpsc::channel::<SyncSendPack>(32);
+    //thread to thread communication channel for incoming packets to the UI
+    let (tx_to_responder, mut ui_rx) = mpsc::channel::<SyncSendPack>(32);
 
-    //Oneshot to retrieve a future for the Responder thread which can communicate
-    //with the UI on our behalf. 
-    let (tx_fut_to_main, mut rx_fut_from_kickstart) = oneshot::channel::<tokio::task::JoinHandle<()>>();
+    //thread to thread communication channel for outgoing packets to the Server
+    let (tx_to_server, mut outgoing_rx) = mpsc::channel::<SyncSendPack>(32);
+    let tx2 = tx_to_server.clone();
+    let tx3 = tx_to_server.clone();
 
+    //Oneshot to retrieve a sender to the Cursive UI's callback channel from the kickstart
+    //function.
+    let (tx_cb_to_main, mut rx_cb_from_kickstart) = oneshot::channel::<cursive::CbSink>();
     
-    //Spawn asynchronous tokio tasks to watch for shutdown triggers and 
-    //receive messages from the IRC server.
-    let read_task = tokio::spawn(reader(con, tx_to_ui)); 
-    let stop_task = tokio::spawn(shutdown_monitor(r2));
-
     //Start the console UI in it's own OS thread (doesn't play nice with tokio's
     //task management green threads).
-    let ui_thread = thread::spawn(move || {ui_kickstart(r3, ui_rx, tx_fut_to_main)});
+    let ui_thread = thread::spawn(move || {ui_kickstart(r3, tx_cb_to_main, tx2)});
 
-    let responder_task;
-
-    match rx_fut_from_kickstart.await {
-        Ok(v) => {responder_task = v},
-        Err(e) => {println!("Got Err instead of future {:?}",e);return Err(IrcError::PacketMismatch());},
+    //Retrieve a handle to the UI's callback endpoint, so we may tell it to react to incoming
+    //packets.
+    let cb_handle;
+    match rx_cb_from_kickstart.await {
+        Ok(v) => {cb_handle= v},
+        Err(e) => {println!("Got Err instead of handle{:?}",e);return Err(IrcError::PacketMismatch());},
     }
 
+    //Split the TcpStream into reader and writer, pass each to their own asynchronous task
+    let (tcp_in, tcp_out) = con.into_split();
+    //Spawn asynchronous tokio tasks to watch for shutdown triggers, receive messages from, and
+    //send messages to the IRC server.
+    let stop_task = tokio::spawn(shutdown_monitor(r2));
+    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder)); 
+    let responder_task = tokio::spawn(responder(cb_handle,ui_rx)); 
+    let send_task = tokio::spawn(writer(tcp_out ,outgoing_rx));
+    let heartbeat_task = tokio::spawn(pulse(tx3));
 
     //Polls the tokio tasks to keep them operating, ends all tasks when one completes
     //stop_task will complete when the Cursive UI event loop exits (explicit quit, or catches ctrl-c)
     //    or if our direct ctrl-c handler gets a ctrl-c signal that evaded Cursive's runtime.
     //read_task will complete when the incoming network connection from the server closes, or we 
     //    recieve a ServerDepart message indicating the server will close.
+    //responder_task may complete when read_task drops the communication channel they share
+    //send_task will complete with the outgoing network connection to the server closes.
     tokio::select!{
         out = read_task => {println!("We stopping with {:?}",out?);},
         _ = responder_task => {println!("responder died:(");},
         _ = stop_task => {println!("CTL-c out of the select");},
+        _ = send_task => {println!("Outgoing channel died...");},
     }
 
     Ok(())
 
 }
 
-//fn ui_engine(s : &mut CursiveRunnable, running: Arc<AtomicBool>) -> ()
-fn ui_kickstart(running: Arc<AtomicBool>, rx_from_main: mpsc::Receiver<SyncSendPack>, tx_return_future: tokio::sync::oneshot::Sender<tokio::task::JoinHandle<()>>)
+fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::oneshot::Sender<cursive::CbSink>, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>)
 {
 	let mut siv = cursive::default();
     let cb = siv.cb_sink().clone();
-    let respond_task = tokio::spawn(responder(cb,rx_from_main)); 
+    tx_return_cb_handle.send(cb).expect("Couldn't pass back cb handle");
 
 
     siv.run();
 
     running.store(false, Ordering::SeqCst);
 
+}
+
+async fn pulse<'a>(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()>
+{
+    let mut wait_period = time::interval(Duration::from_millis(5000));
+    loop {
+        wait_period.tick().await;
+        let heartbeat = HeartbeatPacket::new().expect("Heartbeat packets should be infallible on creation");
+        tx_packet_out.send(heartbeat.into()).await?;
+    }
 }
 
 async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSendPack>)
@@ -117,7 +138,6 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
         println!("parse me packets!");
     }
 }
-
 
 
 async fn shutdown_monitor(running: Arc<AtomicBool>)
@@ -142,8 +162,15 @@ async fn shutdown_monitor(running: Arc<AtomicBool>)
 
 }
 
+async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_send: mpsc::Receiver<SyncSendPack>) -> Result<'a,()> {
+    while let Some(packet) = rx_packets_to_send.recv().await {
+        println!("send me packets!");
+    }
+    Ok(())
 
-async fn reader<'a>(mut con: TcpStream, tx_to_ui: mpsc::Sender<SyncSendPack>) -> Result<'a, ()> {
+}
+
+async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>) -> Result<'a, ()> {
     println!("in fn");
     let mut peeker = [0; 5];
     let mut bytes_peeked;
