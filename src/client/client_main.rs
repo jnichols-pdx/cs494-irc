@@ -38,6 +38,8 @@ async fn main() -> Result<'static, ()>{
     let r2 = running.clone();
     let r3 = running.clone();
 
+    let found_pulse = Arc::new(AtomicBool::new(true));
+    let fp = found_pulse.clone();
 
     let mut arg_list = env::args().skip(1);
     let my_name = arg_list.next().unwrap();
@@ -85,10 +87,11 @@ async fn main() -> Result<'static, ()>{
     //Spawn asynchronous tokio tasks to watch for shutdown triggers, receive messages from, and
     //send messages to the IRC server.
     let stop_task = tokio::spawn(shutdown_monitor(r2));
-    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder)); 
+    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder, fp)); 
     let responder_task = tokio::spawn(responder(cb_handle,ui_rx)); 
     let send_task = tokio::spawn(writer(tcp_out ,outgoing_rx));
     let heartbeat_task = tokio::spawn(pulse(tx3));
+    let watchdog_task = tokio::spawn(pulse_monitor(found_pulse));
 
     //Polls the tokio tasks to keep them operating, ends all tasks when one completes
     //stop_task will complete when the Cursive UI event loop exits (explicit quit, or catches ctrl-c)
@@ -97,11 +100,13 @@ async fn main() -> Result<'static, ()>{
     //    recieve a ServerDepart message indicating the server will close.
     //responder_task may complete when read_task drops the communication channel they share
     //send_task will complete with the outgoing network connection to the server closes.
+    //watchdog_task will complete if the server fails to send heartbeats for 30 seconds.
     tokio::select!{
         out = read_task => {println!("We stopping with {:?}",out?);},
         _ = responder_task => {println!("responder died:(");},
         _ = stop_task => {println!("CTL-c out of the select");},
         _ = send_task => {println!("Outgoing channel died...");},
+        _ = watchdog_task => {println!("Server heartbeat missing for 30 seconds. Exiting.");},
     }
 
     Ok(())
@@ -139,6 +144,25 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
     }
 }
 
+async fn pulse_monitor(found_pulse: Arc<AtomicBool>)
+{
+    let mut seconds_since_heartbeat = 0 as u8;
+    let mut wait_period = time::interval(Duration::from_millis(1000));
+    loop {
+        wait_period.tick().await;
+        if found_pulse.load(Ordering::SeqCst) {
+            seconds_since_heartbeat = 0;
+            found_pulse.store(false, Ordering::SeqCst);
+        }else {
+            if seconds_since_heartbeat >= 30 {
+                break;
+            }
+            seconds_since_heartbeat +=1;
+        }
+    }
+
+
+}
 
 async fn shutdown_monitor(running: Arc<AtomicBool>)
 {
@@ -170,7 +194,7 @@ async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_
 
 }
 
-async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>) -> Result<'a, ()> {
+async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
     println!("in fn");
     let mut peeker = [0; 5];
     let mut bytes_peeked;
@@ -207,7 +231,7 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                         }
                     },
                     IrcKind::IRC_KIND_HEARTBEAT => {
-
+                        found_pulse.store(true, Ordering::SeqCst);
                         println!("heartbeat!");
                     },
                     IrcKind::IRC_KIND_ENTER_ROOM => {println!("Got enter room packet...?");},
