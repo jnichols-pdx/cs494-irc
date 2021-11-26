@@ -108,6 +108,9 @@ pub enum IrcError {
 
     #[error("Encountered Join Error: {0}")]
     JoinErr(tokio::task::JoinError),
+
+    #[error("Encountered mpsc Send error: {0}")]
+    SendPackErr(tokio::sync::mpsc::error::SendError<SyncSendPack>),
 }
 
 impl From<io::Error> for IrcError {
@@ -131,6 +134,12 @@ impl From<std::str::Utf8Error> for IrcError {
 impl From<tokio::task::JoinError> for IrcError {
     fn from(err: tokio::task::JoinError) -> IrcError {
         IrcError::JoinErr(err)
+    }
+}
+
+impl From<tokio::sync::mpsc::error::SendError<SyncSendPack>> for IrcError {
+    fn from(err: tokio::sync::mpsc::error::SendError<SyncSendPack>) -> IrcError {
+        IrcError::SendPackErr(err)
     }
 }
 
@@ -312,6 +321,7 @@ pub trait IrcPacket {
 //This ugly struct simply wraps all the potential concrete implementations of IrcPacket into
 //a single struct, which itself is SYNC/SEND and thus can between tasks/threads via tokio or std
 //channels.
+#[derive(Debug)]
 pub struct SyncSendPack {
     pub contained_kind: IrcKind,
     pub errp: Option<ErrorPacket>,
@@ -852,6 +862,7 @@ impl From<ServerDepartsPacket> for SyncSendPack {
 //  Error Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct ErrorPacket {
     pub error_code: IrcErrCode,
 }
@@ -900,6 +911,7 @@ impl IrcPacket for ErrorPacket {
 // NewClient Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct NewClientPacket {
     pub chat_name: String,
 }
@@ -952,6 +964,7 @@ impl IrcPacket for NewClientPacket {
 // Heartbeat Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct HeartbeatPacket {}
 
 impl HeartbeatPacket {
@@ -991,6 +1004,7 @@ impl IrcPacket for HeartbeatPacket {
 // Enter Room Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct EnterRoomPacket {
     pub room_name: String,
 }
@@ -1043,6 +1057,7 @@ impl IrcPacket for EnterRoomPacket {
 // Leave Room Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct LeaveRoomPacket {
     pub room_name: String,
 }
@@ -1095,6 +1110,7 @@ impl IrcPacket for LeaveRoomPacket {
 // List Rooms Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct ListRoomsPacket {}
 
 impl ListRoomsPacket {
@@ -1134,6 +1150,7 @@ impl IrcPacket for ListRoomsPacket {
 // Room Listing Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct RoomListingPacket {
     pub rooms: Vec<String>,
 }
@@ -1217,6 +1234,7 @@ impl IrcPacket for RoomListingPacket {
 // User Listing Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct UserListingPacket {
     pub room: String,
     pub users: Vec<String>,
@@ -1339,6 +1357,7 @@ impl fmt::Display for UserStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct QueryUserPacket {
     pub user_name: String,
     pub status: UserStatus,
@@ -1409,6 +1428,7 @@ impl IrcPacket for QueryUserPacket {
 // Send Message Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct SendMessagePacket {
     pub room: String,
     pub message: String,
@@ -1482,6 +1502,7 @@ impl IrcPacket for SendMessagePacket {
 // Broadcast Message Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct BroadcastMessagePacket {
     pub message: String,
 }
@@ -1546,6 +1567,7 @@ impl IrcPacket for BroadcastMessagePacket {
 // Post Message Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct PostMessagePacket {
     pub room: String,
     pub sender: String,
@@ -1632,6 +1654,7 @@ impl IrcPacket for PostMessagePacket {
 // Direct Message Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct DirectMessagePacket {
     pub target: String,
     pub message: String,
@@ -1705,6 +1728,7 @@ impl IrcPacket for DirectMessagePacket {
 // FILE TRANSFER HANDSHAKE PACKETS
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct TransferCore {
     pub recipient: String,
     pub sender: String,
@@ -1713,14 +1737,17 @@ pub struct TransferCore {
     pub file_name: String,
 }
 
+#[derive(Debug)]
 pub struct OfferFilePacket {
     core: TransferCore,
 }
 
+#[derive(Debug)]
 pub struct AcceptFilePacket {
     core: TransferCore,
 }
 
+#[derive(Debug)]
 pub struct RejectFilePacket {
     core: TransferCore,
 }
@@ -1947,6 +1974,7 @@ impl RejectFilePacket {
 // File Transfer Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct FileTransferPacket {
     pub transfer_id: u16,
     pub finished: bool,
@@ -2018,6 +2046,7 @@ impl IrcPacket for FileTransferPacket {
 // Client Departs Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct ClientDepartsPacket {
     pub message: String,
 }
@@ -2082,6 +2111,7 @@ impl IrcPacket for ClientDepartsPacket {
 // Server Departs Packet
 ///////////////////////////////////////////////
 
+#[derive(Debug)]
 pub struct ServerDepartsPacket {
     pub message: String,
 }
