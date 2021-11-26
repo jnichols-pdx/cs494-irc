@@ -292,6 +292,560 @@ pub trait IrcPacket {
     fn from_bytes(source: &[u8]) -> Result<Self>
     where
         Self: Sized;
+
+}
+
+/////////////////////////////
+// Ugly Passing Struct
+/////////////////////////////
+
+//Rust's requirements for moving data between threads require said data to implement
+//both SYNC and SEND traits. All of the concrete implementations of my IrcPacket trait
+//ARE SYNC and SEND, however I haven't found a way to mark a *trait* as SYNC/SEND...
+//Which is reasonable as we have no gaurantees that some other user wouldn't make their 
+//own concrete implementation of IrcPacket that was NOT Sync and Send.
+//
+//This means that if I cannot stuff an 'IrcPacket' through an MPSC channel. I can instead
+//either set the channel up for a single concrete packet type or some other concrete object
+//type, such as this SyncSendPack struct.
+//
+//This ugly struct simply wraps all the potential concrete implementations of IrcPacket into
+//a single struct, which itself is SYNC/SEND and thus can between tasks/threads via tokio or std
+//channels.
+pub struct SyncSendPack {
+    pub contained_kind: IrcKind,
+    pub errp: Option<ErrorPacket>,
+    pub ncp: Option<NewClientPacket>,
+    pub hbp: Option<HeartbeatPacket>,
+    pub erp: Option<EnterRoomPacket>,
+    pub lrp: Option<LeaveRoomPacket>,
+    pub lip: Option<ListRoomsPacket>,
+    pub rlp: Option<RoomListingPacket>,
+    pub ulp: Option<UserListingPacket>,
+    pub qup: Option<QueryUserPacket>,
+    pub smp: Option<SendMessagePacket>,
+    pub bmp: Option<BroadcastMessagePacket>,
+    pub pmp: Option<PostMessagePacket>,
+    pub dmp: Option<DirectMessagePacket>,
+    pub ofp: Option<OfferFilePacket>,
+    pub afp: Option<AcceptFilePacket>,
+    pub rfp: Option<RejectFilePacket>,
+    pub ftp: Option<FileTransferPacket>,
+    pub cpd: Option<ClientDepartsPacket>,
+    pub sdp: Option<ServerDepartsPacket>,
+}
+
+impl From<ErrorPacket> for SyncSendPack {
+    fn from(packet_in: ErrorPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_ERR,
+            errp: Some(packet_in),
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<NewClientPacket> for SyncSendPack {
+    fn from(packet_in: NewClientPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_NEW_CLIENT,
+            errp: None,
+            ncp: Some(packet_in),
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<HeartbeatPacket> for SyncSendPack {
+    fn from(packet_in: HeartbeatPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_HEARTBEAT,
+            errp:None,
+            ncp: None,
+            hbp: Some(packet_in),
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<EnterRoomPacket> for SyncSendPack {
+    fn from(packet_in: EnterRoomPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_ENTER_ROOM,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: Some(packet_in),
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<LeaveRoomPacket> for SyncSendPack {
+    fn from(packet_in: LeaveRoomPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_LEAVE_ROOM,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: Some(packet_in),
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<ListRoomsPacket> for SyncSendPack {
+    fn from(packet_in: ListRoomsPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_LIST_ROOMS,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: Some(packet_in),
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<RoomListingPacket> for SyncSendPack {
+    fn from(packet_in: RoomListingPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_ROOM_LISTING,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: Some(packet_in),
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<UserListingPacket> for SyncSendPack {
+    fn from(packet_in: UserListingPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_USER_LISTING,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: Some(packet_in),
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<QueryUserPacket> for SyncSendPack {
+    fn from(packet_in: QueryUserPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_QUERY_USER,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: Some(packet_in),
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<SendMessagePacket> for SyncSendPack {
+    fn from(packet_in: SendMessagePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_SEND_MESSAGE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: Some(packet_in),
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<BroadcastMessagePacket> for SyncSendPack {
+    fn from(packet_in: BroadcastMessagePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_BROADCAST_MESSAGE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: Some(packet_in),
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<PostMessagePacket> for SyncSendPack {
+    fn from(packet_in: PostMessagePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_POST_MESSAGE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: Some(packet_in),
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<DirectMessagePacket> for SyncSendPack {
+    fn from(packet_in: DirectMessagePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_DIRECT_MESSAGE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: Some(packet_in),
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<OfferFilePacket> for SyncSendPack {
+    fn from(packet_in: OfferFilePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_OFFER_FILE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: Some(packet_in),
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<AcceptFilePacket> for SyncSendPack {
+    fn from(packet_in: AcceptFilePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_ACCEPT_FILE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: Some(packet_in),
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<RejectFilePacket> for SyncSendPack {
+    fn from(packet_in: RejectFilePacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_REJECT_FILE,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: Some(packet_in),
+            ftp: None,
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<FileTransferPacket> for SyncSendPack {
+    fn from(packet_in: FileTransferPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_FILE_TRANSFER,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: Some(packet_in),
+            cpd: None,
+            sdp: None,
+        }
+    }
+}
+
+impl From<ClientDepartsPacket> for SyncSendPack {
+    fn from(packet_in: ClientDepartsPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_CLIENT_DEPARTS,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: Some(packet_in),
+            sdp: None,
+        }
+    }
+}
+
+impl From<ServerDepartsPacket> for SyncSendPack {
+    fn from(packet_in: ServerDepartsPacket) -> SyncSendPack {
+        SyncSendPack {
+            contained_kind: IrcKind::IRC_KIND_SERVER_DEPARTS,
+            errp:None,
+            ncp: None,
+            hbp: None,
+            erp: None,
+            lrp: None,
+            lip: None,
+            rlp: None,
+            ulp: None,
+            qup: None,
+            smp: None,
+            bmp: None,
+            pmp: None,
+            dmp: None,
+            ofp: None,
+            afp: None,
+            rfp: None,
+            ftp: None,
+            cpd: None,
+            sdp: Some(packet_in),
+        }
+    }
 }
 
 ///////////////////////////////////////////////
