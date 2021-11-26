@@ -8,6 +8,7 @@ use tokio::net::{TcpListener, TcpStream};
 //use std::net::{TcpListener, TcpStream, Shutdown};
 //use std::net::{Shutdown};
 //use std::io::{Write,Read};
+use std::io::{ErrorKind};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use std::collections::HashMap;
 use bytes::{Bytes, BytesMut, Buf, BufMut};
@@ -98,15 +99,27 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
 
     let mut buffer = [0u8; 256];
     let mut buff_b = BytesMut::with_capacity(69);
-    let mut bytes_read;
+    let mut bytes_read : usize = 0;
     let client_name;
-    bytes_read = stream.try_read(&mut buffer);
-    println!("bytes read is {:?}", bytes_read);
+
+    loop {
+        let result = stream.try_read(&mut buffer);
+        match result {
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                continue;
+            }
+            Err(e) => {
+                break;
+            }
+            Ok(0) => break,
+            Ok(n) => {bytes_read = n;break},
+        };
+    }
 
     /*match bytes_read {
         Ok(0) => return Err(IrcError::PacketMismatch()), //placeholder*/
         
-    if bytes_read?> 0 {
+    if bytes_read> 0 {
        // client_name = String::from_utf8(buffer[0..bytes_read].to_vec()).unwrap();
         //println!("{}",std::str::from_utf8(&buffer[0..bytes_read]).unwrap());
         buff_b.extend_from_slice(&buffer[0..69]);
