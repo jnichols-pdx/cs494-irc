@@ -183,7 +183,7 @@ async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
 
 
                     dude.connection.write(&ncp.as_bytes()).await?;
-                    dude.connection.write(&err1.as_bytes()).await?;
+                    /*dude.connection.write(&err1.as_bytes()).await?;
                     dude.connection.write(&err2.as_bytes()).await?;
                     dude.connection.write(&err3.as_bytes()).await?;
                     dude.connection.write(&err4.as_bytes()).await?;
@@ -191,7 +191,7 @@ async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
                     dude.connection.write(&err6.as_bytes()).await?;
                     dude.connection.write(&err7.as_bytes()).await?;
                     dude.connection.write(&err8.as_bytes()).await?;
-                    dude.connection.write(&err9.as_bytes()).await?;
+                    dude.connection.write(&err9.as_bytes()).await?;*/
                     dude.connection.write(&erp.as_bytes()).await?;
                     dude.connection.write(&lrp.as_bytes()).await?;
                     dude.connection.write(&lip.as_bytes()).await?;
@@ -206,7 +206,7 @@ async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
                     dude.connection.write(&rfp.as_bytes()).await?;
                     dude.connection.write(&ftp.as_bytes()).await?;
                     dude.connection.write(&cdp.as_bytes()).await?;
-                    dude.connection.write(b"\x04\0\0\0\0").await?;
+                    dude.connection.write(b"\x54\0\0\0\x02\x01\x03").await?;
 
                 Ok(())
 }

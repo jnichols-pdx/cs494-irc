@@ -65,6 +65,7 @@ async fn main() -> Result<'static, ()>{
     let (tx_to_server, mut outgoing_rx) = mpsc::channel::<SyncSendPack>(32);
     let tx2 = tx_to_server.clone();
     let tx3 = tx_to_server.clone();
+    let tx4 = tx_to_server.clone();
 
     //Oneshot to retrieve a sender to the Cursive UI's callback channel from the kickstart
     //function.
@@ -87,7 +88,7 @@ async fn main() -> Result<'static, ()>{
     //Spawn asynchronous tokio tasks to watch for shutdown triggers, receive messages from, and
     //send messages to the IRC server.
     let stop_task = tokio::spawn(shutdown_monitor(r2));
-    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder, fp)); 
+    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder, fp, tx4)); 
     let responder_task = tokio::spawn(responder(cb_handle,ui_rx)); 
     let send_task = tokio::spawn(writer(tcp_out ,outgoing_rx));
     let heartbeat_task = tokio::spawn(pulse(tx3));
@@ -141,8 +142,7 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
 
     while let Some(packet) = rx_from_main.recv().await {
         println!("parse me packets!");
-    }
-}
+    } }
 
 async fn pulse_monitor(found_pulse: Arc<AtomicBool>)
 {
@@ -187,29 +187,53 @@ async fn shutdown_monitor(running: Arc<AtomicBool>)
 }
 
 async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_send: mpsc::Receiver<SyncSendPack>) -> Result<'a,()> {
-    while let Some(packet) = rx_packets_to_send.recv().await {
+    let mut bytes_to_go;
+    while let Some(sync_send_packet) = rx_packets_to_send.recv().await {
         println!("send me packets!");
+        match sync_send_packet.contained_kind {
+            IrcKind::IRC_KIND_ERR => {bytes_to_go = sync_send_packet.errp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_NEW_CLIENT => {bytes_to_go = sync_send_packet.ncp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_HEARTBEAT => {bytes_to_go = sync_send_packet.hbp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_ENTER_ROOM => {bytes_to_go = sync_send_packet.erp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_LEAVE_ROOM => {bytes_to_go = sync_send_packet.lrp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_LIST_ROOMS => {bytes_to_go = sync_send_packet.lip.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_ROOM_LISTING => {bytes_to_go = sync_send_packet.rlp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_USER_LISTING => {bytes_to_go = sync_send_packet.ulp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_QUERY_USER => {bytes_to_go = sync_send_packet.qup.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_SEND_MESSAGE => {bytes_to_go = sync_send_packet.smp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_BROADCAST_MESSAGE => { bytes_to_go = sync_send_packet.bmp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_POST_MESSAGE => {bytes_to_go = sync_send_packet.pmp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_DIRECT_MESSAGE => {bytes_to_go = sync_send_packet.dmp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_OFFER_FILE => {bytes_to_go = sync_send_packet.ofp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_ACCEPT_FILE => {bytes_to_go = sync_send_packet.afp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_REJECT_FILE => {bytes_to_go = sync_send_packet.rfp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_FILE_TRANSFER => {bytes_to_go = sync_send_packet.ftp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_CLIENT_DEPARTS => {bytes_to_go = sync_send_packet.cdp.unwrap().as_bytes();}
+            IrcKind::IRC_KIND_SERVER_DEPARTS => {bytes_to_go = sync_send_packet.sdp.unwrap().as_bytes();}
+            _ => {println!("Can't send Unknown type packet!");continue;},
+        }
+        con.write(&bytes_to_go).await?;
+        con.flush().await?;
     }
     Ok(())
-
 }
 
-async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
-    println!("in fn");
+async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+    //println!("in fn");
     let mut peeker = [0; 5];
     let mut bytes_peeked;
     loop {
-    println!("in loop");
+    //println!("in loop");
         bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
-            println!("------");
-            println!("{}.{}.{}.{}.{}", peeker[0],peeker[1],peeker[2],peeker[3],peeker[4]);
+            //println!("------");
+            //println!("{}.{}.{}.{}.{}", peeker[0],peeker[1],peeker[2],peeker[3],peeker[4]);
             let kindbyte = peeker[0];
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
             let mut buffer = vec![0; msg_len + 5];
             let bytes_read = con.read(&mut buffer).await?;
-            println!("got {} bytes, expected {}", bytes_read, msg_len +5);
-            println!("{:?}", buffer);
+            //println!("got {} bytes, expected {}", bytes_read, msg_len +5);
+            //println!("{:?}", buffer);
             if bytes_read == msg_len + 5 {
                 let kind_raw = IrcKind::from(buffer[0]);
                 match  kind_raw {
@@ -218,7 +242,7 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                         let my_error = ErrorPacket::from_bytes(&buffer[0..6])?;
 
                         match my_error.error_code {
-                            IrcErrCode::IRC_ERR_UNKNOWN => { println!("Bogus! Server's confused (err Unknown)");},
+                            IrcErrCode::IRC_ERR_UNKNOWN => { println!("Bogus! Server's confused (we received Error: Unknown)");},
                             IrcErrCode::IRC_ERR_ILLEGAL_KIND => { println!("Bogus! Illegal Kind!");},
                             IrcErrCode::IRC_ERR_ILLEGAL_LENGTH => { println!("Bogus! Illegal Length!");},
                             IrcErrCode::IRC_ERR_NAME_IN_USE => { println!("Bogus! That name's taken!");},
@@ -229,10 +253,10 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                             IrcErrCode::IRC_ERR_TOO_MANY_ROOMS => { println!("Bogus! Too Many Rooms!");},
                             _ => (),
                         }
+                        break;
                     },
                     IrcKind::IRC_KIND_HEARTBEAT => {
                         found_pulse.store(true, Ordering::SeqCst);
-                        println!("heartbeat!");
                     },
                     IrcKind::IRC_KIND_ENTER_ROOM => {println!("Got enter room packet...?");},
                     IrcKind::IRC_KIND_LEAVE_ROOM => {println!("Got leave room packet...?");},
@@ -264,8 +288,6 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
 
                     },
 
-
-
                     IrcKind::IRC_KIND_DIRECT_MESSAGE => {
                         let new_direct = DirectMessagePacket::from_bytes(&buffer[..])?;
                         println!("DM from {}: {}", &new_direct.target, &new_direct.message);
@@ -279,14 +301,21 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                         println!("Got server departs packet.");
                         let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
                         println!("Goodbye: {}", server_leaving.get_message());
-                        },
-                    _ => println!("Unknown packet:\n{:?}",&buffer[0..bytes_read]),
+                    },
+                    _ => {
+                            println!("Error: Unknown packet recieved:\n{:?}",&buffer[0..bytes_read]);
+                            let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN).expect("Error packets should be infallible on creation");
+                            tx_packet_out.send(error_notice.into()).await?;
+                            break;
+
+                    },
 
                 }
             }
         }else {
-            println!("aw shit");
-            break;
+            if bytes_peeked == 0{
+            println!("Read connection to server has closed.");
+            break;}
         }
     }
     Ok(())
