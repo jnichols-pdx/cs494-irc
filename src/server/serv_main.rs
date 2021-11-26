@@ -56,20 +56,22 @@ async fn main() -> Result<'static, ()> {
 
         if !running.load(Ordering::SeqCst) {
             //we've been asked to close - so send some cleanup packets!
+            println!("ctrl-c shutdown");
 
             let outgoing = ServerDepartsPacket::new(&"Taking a nap, seeya!".to_string())?;
             for (_,user) in users.iter_mut() {
                 user.connection.write(&outgoing.as_bytes()).await?;
                 //user.connection.shutdown(Shutdown::Both).expect("blah - couldn't say bye");
-                user.connection.shutdown();
+                user.connection.shutdown().await?;
             }
             return Ok(());
         }
         let mut new_client =  handle_client(socket)?;
         if users.contains_key(&new_client.name) {
+            println!("dup shutdown");
             new_client.connection.write(&ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE)?.as_bytes()).await?;
             //new_client.connection.shutdown(Shutdown::Both)?;
-            new_client.connection.shutdown();
+            new_client.connection.shutdown().await?;
         }else {
             let newbie_name = new_client.name.clone();
             {
@@ -98,12 +100,13 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
     let mut buff_b = BytesMut::with_capacity(69);
     let mut bytes_read;
     let client_name;
-    bytes_read = stream.try_read(&mut buffer)?;
+    bytes_read = stream.try_read(&mut buffer);
+    println!("bytes read is {:?}", bytes_read);
 
     /*match bytes_read {
         Ok(0) => return Err(IrcError::PacketMismatch()), //placeholder*/
         
-    if bytes_read> 0 {
+    if bytes_read?> 0 {
        // client_name = String::from_utf8(buffer[0..bytes_read].to_vec()).unwrap();
         //println!("{}",std::str::from_utf8(&buffer[0..bytes_read]).unwrap());
         buff_b.extend_from_slice(&buffer[0..69]);
@@ -123,6 +126,7 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
 }
 
 async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
+        println!("I'm at spammmm!");
 
 
                     let mut ncp = NewClientPacket::new(&"Jeff".into())?;
@@ -189,5 +193,7 @@ async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
                     dude.connection.write(&rfp.as_bytes()).await?;
                     dude.connection.write(&ftp.as_bytes()).await?;
                     dude.connection.write(&cdp.as_bytes()).await?;
+                    dude.connection.write(b"\x04\0\0\0\0").await?;
+
                 Ok(())
 }

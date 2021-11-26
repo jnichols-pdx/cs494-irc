@@ -9,6 +9,7 @@ use tokio::net::TcpStream;
 //use std::net::TcpStream;
 //use std::io::{Write,Read};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::time::{self, Duration};
 use std::error::Error;
 use num_enum::FromPrimitive;
 //use bytes::{Bytes, BytesMut, Buf, BufMut};*/
@@ -17,14 +18,24 @@ use ctrlc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+
+use cursive::Cursive;
+use cursive::views::TextView;
+use cursive_tabs::TabPanel;
+use cursive::view::*;
+use cursive::views::*;
+use std::thread;
+
+
 #[tokio::main]
 async fn main() -> Result<'static, ()>{
-    /*let running = Arc::new(AtomicBool::new(true));
+    let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
     ctrlc::set_handler(move || {
         r.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");*/
+    }).expect("Error setting Ctrl-C handler");
 
+    let r2 = running.clone();
 
     let mut arg_list = env::args().skip(1);
     let my_name = arg_list.next().unwrap();
@@ -42,16 +53,59 @@ async fn main() -> Result<'static, ()>{
 
     let ident = NewClientPacket::new(&my_name)?;
 
-    let mut peeker = [0; 5];
     println!("about to con");
     let mut con = TcpStream::connect(host).await?;
     //con.set_nodelay(true).expect("Unable to set nodelaay");
     println!("conned, about to ident");
     con.write(&ident.as_bytes()).await?;
     println!("idented, waiting for resposne");
-    let mut bytes_peeked;
 
+    let runner = tokio::spawn(reader(con)); 
+    let stopper = tokio::spawn(shutdown_monitor(r2));
+
+    let ui = thread::spawn(move || {
+	    let mut siv = cursive::default();
+	    siv.run();
+    });
+
+    tokio::select!{
+        out =  runner => {println!("We stopping with {:?}",out?);},
+        _ = stopper => {println!("CTL-c out of the select");},
+    }
+
+    Ok(())
+
+}
+
+async fn shutdown_monitor(running: Arc<AtomicBool>)
+{
+    let mut wait_period = time::interval(Duration::from_millis(100));
     loop {
+
+        wait_period.tick().await;
+        if !running.load(Ordering::SeqCst) {
+            //we've been asked to close - so send some cleanup packets!
+            println!("ctrl-c shutdown");
+
+            //TODO: communication accross threads for sending...
+            //let outgoing = ClientDepartsPacket::new(&"Client going to vegas".to_string())?;
+            //    con.write(&outgoing.as_bytes()).await?;
+            
+            break;
+        }
+
+        //TODO: also check for communication from Cursive :3
+    }
+
+}
+
+
+async fn reader<'a>(mut con: TcpStream) -> Result<'a, ()> {
+    println!("in fn");
+    let mut peeker = [0; 5];
+    let mut bytes_peeked;
+    loop {
+    println!("in loop");
         bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
             println!("------");
@@ -137,11 +191,10 @@ async fn main() -> Result<'static, ()>{
                 }
             }
         }else {
+            println!("aw shit");
             break;
         }
     }
-
-
     Ok(())
 
 }

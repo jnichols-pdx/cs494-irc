@@ -105,6 +105,9 @@ pub enum IrcError {
 
     #[error("Encountered UTF8 Error: {0}")]
     Utf8Err(std::str::Utf8Error),
+
+    #[error("Encountered Join Error: {0}")]
+    JoinErr(tokio::task::JoinError),
 }
 
 impl From<io::Error> for IrcError {
@@ -122,6 +125,12 @@ impl From<std::string::FromUtf8Error> for IrcError {
 impl From<std::str::Utf8Error> for IrcError {
     fn from(err: std::str::Utf8Error) -> IrcError {
         IrcError::Utf8Err(err)
+    }
+}
+
+impl From<tokio::task::JoinError> for IrcError {
+    fn from(err: tokio::task::JoinError) -> IrcError {
+        IrcError::JoinErr(err)
     }
 }
 
