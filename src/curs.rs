@@ -2,7 +2,7 @@ use cursive::views::TextView;
 use cursive_tabs::TabPanel;
 use cursive::view::*;
 use cursive::views::*;
-use cursive::traits::*;
+//use cursive::traits::*;
 use cursive::Cursive;
 
 fn main() {

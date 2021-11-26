@@ -2,41 +2,64 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 
-//#[macro_use]
-//extern crate num_derive;
-//
-
 use irclib::{*};
 
 use std::env;
-use std::net::TcpStream;
-use std::io::{Write,Read};
+use tokio::net::TcpStream;
+//use std::net::TcpStream;
+//use std::io::{Write,Read};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use std::error::Error;
 use num_enum::FromPrimitive;
 //use bytes::{Bytes, BytesMut, Buf, BufMut};*/
-//use irclib::IrcPacket;
 
-fn main() -> Result<'static, ()>{
-    let my_name = env::args().skip(1).next().unwrap();
+use ctrlc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> Result<'static, ()>{
+    /*let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");*/
+
+
+    let mut arg_list = env::args().skip(1);
+    let my_name = arg_list.next().unwrap();
     println!("Hello, world! [client]:{:?}",my_name);
+
+    let host;
+    if arg_list.len() > 0 {
+        host = arg_list.next().unwrap();
+        println!("going to host {}", host);
+    } else {
+        host = "192.168.2.5:17734".to_string();
+        println!("going to default host {}", host);
+    }
+
 
     let ident = NewClientPacket::new(&my_name)?;
 
     let mut peeker = [0; 5];
-    let mut con = TcpStream::connect("192.168.2.5:17734")?;
-    con.set_nodelay(true).expect("Unable to set nodelaay");
-    con.write(&ident.as_bytes())?;
+    println!("about to con");
+    let mut con = TcpStream::connect(host).await?;
+    //con.set_nodelay(true).expect("Unable to set nodelaay");
+    println!("conned, about to ident");
+    con.write(&ident.as_bytes()).await?;
+    println!("idented, waiting for resposne");
     let mut bytes_peeked;
 
     loop {
-        bytes_peeked = con.peek(&mut peeker)?;
+        bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
             println!("------");
             println!("{}.{}.{}.{}.{}", peeker[0],peeker[1],peeker[2],peeker[3],peeker[4]);
             let kindbyte = peeker[0];
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
             let mut buffer = vec![0; msg_len + 5];
-            let bytes_read = con.read(&mut buffer)?;
+            let bytes_read = con.read(&mut buffer).await?;
             println!("got {} bytes, expected {}", bytes_read, msg_len +5);
             println!("{:?}", buffer);
             if bytes_read == msg_len + 5 {

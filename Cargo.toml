@@ -19,6 +19,8 @@ regex = "1.5"
 lazy_static = "1.4"
 duplicate = "0.3.0"
 ctrlc = "3"
+tokio = { version = "1", features = ["full"]}
+futures = "0.3"
 
 [[bin]]
 name = "server"

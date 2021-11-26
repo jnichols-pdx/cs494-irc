@@ -4,8 +4,11 @@
 
 use irclib::{*};
 
-use std::net::{TcpListener, TcpStream, Shutdown};
-use std::io::{Write,Read};
+use tokio::net::{TcpListener, TcpStream};
+//use std::net::{TcpListener, TcpStream, Shutdown};
+//use std::net::{Shutdown};
+//use std::io::{Write,Read};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use std::collections::HashMap;
 use bytes::{Bytes, BytesMut, Buf, BufMut};
 
@@ -28,7 +31,8 @@ pub struct Room<'a,'b> {
 
 
 
-fn main() -> Result<'static, ()> {
+#[tokio::main]
+async fn main() -> Result<'static, ()> {
     println!("Hello, world! [server]");
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -37,48 +41,56 @@ fn main() -> Result<'static, ()> {
     }).expect("Error setting Ctrl-C handler");
 
 
-    let listener = TcpListener::bind("0.0.0.0:17734")?;
+    let listener = TcpListener::bind("0.0.0.0:17734").await?;
 
         let heart = HeartbeatPacket::new()?;
     
     let mut users = HashMap::<String, Client>::new();
     let mut rooms= HashMap::<String, Room>::new();
 
-    for stream in listener.incoming() {
+
+//    for stream in listener.incoming() {
+
+    loop {
+        let (socket, _) = listener.accept().await?;
+
         if !running.load(Ordering::SeqCst) {
             //we've been asked to close - so send some cleanup packets!
 
             let outgoing = ServerDepartsPacket::new(&"Taking a nap, seeya!".to_string())?;
             for (_,user) in users.iter_mut() {
-                user.connection.write(&outgoing.as_bytes())?;
-                user.connection.shutdown(Shutdown::Both).expect("blah - couldn't say bye");
+                user.connection.write(&outgoing.as_bytes()).await?;
+                //user.connection.shutdown(Shutdown::Both).expect("blah - couldn't say bye");
+                user.connection.shutdown();
             }
             return Ok(());
         }
-        let mut new_client =  handle_client(stream?)?;
+        let mut new_client =  handle_client(socket)?;
         if users.contains_key(&new_client.name) {
-            new_client.connection.write(&ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE)?.as_bytes())?;
-            new_client.connection.shutdown(Shutdown::Both)?;
+            new_client.connection.write(&ErrorPacket::new(IrcErrCode::IRC_ERR_NAME_IN_USE)?.as_bytes()).await?;
+            //new_client.connection.shutdown(Shutdown::Both)?;
+            new_client.connection.shutdown();
         }else {
             let newbie_name = new_client.name.clone();
             {
-            spam_user(&mut new_client)?;
+            spam_user(&mut new_client).await?;
             }
             users.insert(new_client.name.clone(), new_client);
             let outgoing = PostMessagePacket::new(&"all".to_string(),&newbie_name, &format!("{} has joined the server!", &newbie_name))?;
             for (_,user) in users.iter_mut() {
-                user.connection.write(&outgoing.as_bytes())?;
-                user.connection.write(&heart.as_bytes())?;
+                user.connection.write(&outgoing.as_bytes()).await?;
+                user.connection.write(&heart.as_bytes()).await?;
             }
         }
             
     }
-    Ok(())
+//    Ok(())
 }
 
+// fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>> {
 fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>> {
     stream.set_nodelay(true).expect("Unable to set delay false");
-    stream.set_nonblocking(true).expect("Unable to go nonblocking.");
+    //stream.set_nonblocking(true).expect("Unable to go nonblocking.");
     let mut empty_rooms = Vec::new();
 
 
@@ -86,7 +98,11 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
     let mut buff_b = BytesMut::with_capacity(69);
     let mut bytes_read;
     let client_name;
-    bytes_read = stream.read(&mut buffer)?;
+    bytes_read = stream.try_read(&mut buffer)?;
+
+    /*match bytes_read {
+        Ok(0) => return Err(IrcError::PacketMismatch()), //placeholder*/
+        
     if bytes_read> 0 {
        // client_name = String::from_utf8(buffer[0..bytes_read].to_vec()).unwrap();
         //println!("{}",std::str::from_utf8(&buffer[0..bytes_read]).unwrap());
@@ -106,7 +122,7 @@ fn handle_client<'a,'b>(mut stream: TcpStream) -> std::io::Result<Client<'a,'b>>
     Ok(new_client)
 }
 
-fn spam_user<'a>(dude: &mut Client) -> Result<'a, ()> {
+async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
 
 
                     let mut ncp = NewClientPacket::new(&"Jeff".into())?;
@@ -149,29 +165,29 @@ fn spam_user<'a>(dude: &mut Client) -> Result<'a, ()> {
                     //IrcKind::IRC_KIND_SERVER_DEPARTS => {
 
 
-                    dude.connection.write(&ncp.as_bytes())?;
-                    dude.connection.write(&err1.as_bytes())?;
-                    dude.connection.write(&err2.as_bytes())?;
-                    dude.connection.write(&err3.as_bytes())?;
-                    dude.connection.write(&err4.as_bytes())?;
-                    dude.connection.write(&err5.as_bytes())?;
-                    dude.connection.write(&err6.as_bytes())?;
-                    dude.connection.write(&err7.as_bytes())?;
-                    dude.connection.write(&err8.as_bytes())?;
-                    dude.connection.write(&err9.as_bytes())?;
-                    dude.connection.write(&erp.as_bytes())?;
-                    dude.connection.write(&lrp.as_bytes())?;
-                    dude.connection.write(&lip.as_bytes())?;
-                    dude.connection.write(&rlp.as_bytes())?;
-                    dude.connection.write(&ulp.as_bytes())?;
-                    dude.connection.write(&qup.as_bytes())?;
-                    dude.connection.write(&smp.as_bytes())?;
-                    dude.connection.write(&bmp.as_bytes())?;
-                    dude.connection.write(&dmp.as_bytes())?;
-                    dude.connection.write(&ofp.as_bytes())?;
-                    dude.connection.write(&afp.as_bytes())?;
-                    dude.connection.write(&rfp.as_bytes())?;
-                    dude.connection.write(&ftp.as_bytes())?;
-                    dude.connection.write(&cdp.as_bytes())?;
+                    dude.connection.write(&ncp.as_bytes()).await?;
+                    dude.connection.write(&err1.as_bytes()).await?;
+                    dude.connection.write(&err2.as_bytes()).await?;
+                    dude.connection.write(&err3.as_bytes()).await?;
+                    dude.connection.write(&err4.as_bytes()).await?;
+                    dude.connection.write(&err5.as_bytes()).await?;
+                    dude.connection.write(&err6.as_bytes()).await?;
+                    dude.connection.write(&err7.as_bytes()).await?;
+                    dude.connection.write(&err8.as_bytes()).await?;
+                    dude.connection.write(&err9.as_bytes()).await?;
+                    dude.connection.write(&erp.as_bytes()).await?;
+                    dude.connection.write(&lrp.as_bytes()).await?;
+                    dude.connection.write(&lip.as_bytes()).await?;
+                    dude.connection.write(&rlp.as_bytes()).await?;
+                    dude.connection.write(&ulp.as_bytes()).await?;
+                    dude.connection.write(&qup.as_bytes()).await?;
+                    dude.connection.write(&smp.as_bytes()).await?;
+                    dude.connection.write(&bmp.as_bytes()).await?;
+                    dude.connection.write(&dmp.as_bytes()).await?;
+                    dude.connection.write(&ofp.as_bytes()).await?;
+                    dude.connection.write(&afp.as_bytes()).await?;
+                    dude.connection.write(&rfp.as_bytes()).await?;
+                    dude.connection.write(&ftp.as_bytes()).await?;
+                    dude.connection.write(&cdp.as_bytes()).await?;
                 Ok(())
 }
