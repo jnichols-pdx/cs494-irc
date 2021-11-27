@@ -251,7 +251,25 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
                         });
                 })).unwrap();
             },
-            IrcKind::IRC_KIND_DIRECT_MESSAGE => {},
+            IrcKind::IRC_KIND_DIRECT_MESSAGE => {
+                let dmp = packet.dmp.unwrap();
+                let with_who = dmp.target.to_owned();
+                let txr = tx_packet_out.clone();
+                cb.send(Box::new(move |s: &mut cursive::Cursive| {
+                    match s.find_name::<TextView>(format!("DM:{}-------------------------content", dmp.target).as_str()) {
+                        Some(mut convo) =>{
+                            convo.append(format!("{}: {}\n",with_who, dmp.get_message()));
+                        },
+                        None =>{
+                            let with2 = with_who.clone();
+                            s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
+                                tab_controller.add_tab(make_dm_room(with2.into(),format!("{}: {}\n",with_who, dmp.get_message()).into(), txr));
+                            });
+                        },
+                    };
+                })).unwrap();
+
+            },
             IrcKind::IRC_KIND_OFFER_FILE => {},
             IrcKind::IRC_KIND_ACCEPT_FILE => {},
             IrcKind::IRC_KIND_REJECT_FILE => {},

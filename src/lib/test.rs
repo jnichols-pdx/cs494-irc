@@ -63,6 +63,7 @@ fn name_chars() {
 #[test]
 fn name_length() {
     assert!(valid_name(&"hunter2".to_string()).is_ok()); //short names are OK
+    assert!(valid_name(&"".to_string()).is_err()); //empty names are not
 
     assert!(valid_name(&"abcdefghijklmnopqrstuvwxyz1234567890".to_string()).is_err()); //long names are not
 

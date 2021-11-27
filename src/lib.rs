@@ -195,7 +195,7 @@ pub fn valid_message<'a>(message: &'a String) -> Result<&'a String> {
     }
 
     let num_points = message.chars().count();
-    if num_points == 0 {
+    if num_points <= 1 {
         return Err(IrcError::InvalidEmpty());
     }
 

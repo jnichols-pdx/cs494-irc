@@ -16,7 +16,10 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender
     //means we must ensure names we use internally cannot collide with room names users may
     //provide. Names are at most 32 codepoints long, so by using 32+ character suffixes on names of
     //tab subregions they are ensured to never collide with any user provided room name.
-    let body = TextView::new(initial_text).with_name(format!("{}-------------------------content",name)).scrollable().full_screen();
+    let body = TextView::new(initial_text).with_name(format!("{}-------------------------content",name))
+        .scrollable()
+        .scroll_strategy(ScrollStrategy::StickToBottom) //TODO: figure out how to reapply on incoming message if user has scrolled
+        .full_screen();
     let listing = TextView::new("").with_name(format!("{}--------------------------people",name)).scrollable().full_height().fixed_width(20);
 
     let input = EditView::new().on_submit(move |s,text| { 
@@ -32,6 +35,21 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender
     //The outermost layout view that will be directly contained by a tabview gets the raw room
     //name, permitting that user chosen name to show up in the tabview's user interface.
     let tab_contents = LinearLayout::vertical().child(sideways).child(Panel::new(input).min_height(3)).full_screen().with_name(name);
+    tab_contents
+}
+
+pub fn make_dm_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
+    let body = TextView::new(initial_text).with_name(format!("DM:{}-------------------------content",name))
+        .scrollable()
+        .scroll_strategy(ScrollStrategy::StickToBottom)
+        .full_screen();
+
+    let input = EditView::new().on_submit(move |s,text| { 
+            let txi = tx_packet_out.clone();
+            let _ =  accept_input(s,text,txi, true);
+        }).with_name(format!("DM:{}---------------------------input", name)).full_width();
+
+    let tab_contents = LinearLayout::vertical().child(Panel::new(body)).child(Panel::new(input).min_height(3)).full_screen().with_name(format!("DM:{}",name));
     tab_contents
 }
 
@@ -96,18 +114,25 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                     Some(_) | None => (),
                 };
             } else {
-                //Not a command, send text!
+                //Not a command, send text to a room or DM conversation!
 
                 if is_dm {
+                    //local echo of outgoing text:
+                    let outgoing = DirectMessagePacket::new(&tab_name[3..].to_string(), &text.to_string())?;
+                    s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
+                        content.append(format!("You: {}\n", text));
+                    });
+                    tx_packet_out.blocking_send(outgoing.into())?;
                 } else {
                     let outgoing = SendMessagePacket::new(&tab_name.to_string(), &text.to_string())?;
                     tx_packet_out.blocking_send(outgoing.into())?;
-                }
 
                 //DEBUG: local echo:
                 s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
                     content.append(format!("{}\n", text));
                 });
+                }
+
             }
 
         },
@@ -163,6 +188,7 @@ pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Nam
         .on_submit(move |s,n| {let _ = choose_room(s,n, & tx2);})
         .with_name("Rooms----------------------select")
         .scrollable()
+        .scroll_strategy(ScrollStrategy::StickToBottom)
         .fixed_width(24)
         .full_height();
     let spacer = DummyView
