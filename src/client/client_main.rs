@@ -199,13 +199,12 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
     while let Some(packet) = rx_from_main.recv().await {
         //println!("send me packets!");
         match packet.contained_kind {
-            IrcKind::IRC_KIND_ERR => {},
-            IrcKind::IRC_KIND_NEW_CLIENT => {},
-            IrcKind::IRC_KIND_HEARTBEAT => {},
-            IrcKind::IRC_KIND_ENTER_ROOM => {},
-            IrcKind::IRC_KIND_LEAVE_ROOM => {},
-            IrcKind::IRC_KIND_LIST_ROOMS => {
-                },
+            IrcKind::IRC_KIND_ERR => {}, //Handled by Reader function
+            IrcKind::IRC_KIND_NEW_CLIENT => {}, //meaningless to a client
+            IrcKind::IRC_KIND_HEARTBEAT => {}, //handled by read function
+            IrcKind::IRC_KIND_ENTER_ROOM => {}, //meaningless to a client
+            IrcKind::IRC_KIND_LEAVE_ROOM => {},//meaningless to a client?
+            IrcKind::IRC_KIND_LIST_ROOMS => {}, //meaningless to a client
             IrcKind::IRC_KIND_ROOM_LISTING => {
                 let rlp = packet.rlp.unwrap();
                     cb.send(Box::new(move |s: &mut cursive::Cursive| {
@@ -220,9 +219,16 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
                 let room_name = ulp.room.to_owned();
                 let txr = tx_packet_out.clone();
                 cb.send(Box::new(move |s: &mut cursive::Cursive| {
-                    s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
-                        tab_controller.add_tab(make_room(room_name.into(),"".into(), txr));
-                    });
+                    match s.find_name::<TextView>(format!("{}--------------------------people", ulp.room).as_str()) {
+                        Some(mut list) =>{
+                            list.set_content("");
+                        },
+                        None =>{
+                            s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
+                                tab_controller.add_tab(make_room(room_name.into(),"".into(), txr));
+                            });
+                        },
+                    };
                     s.call_on_name(format!("{}--------------------------people", ulp.room).as_str(), |users_list: &mut TextView| {
                         for user in ulp.users{
                             users_list.append(format!("{}\n", user));
@@ -232,16 +238,26 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
             },
 
             IrcKind::IRC_KIND_QUERY_USER => {},
-            IrcKind::IRC_KIND_SEND_MESSAGE => {},
-            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {},
-            IrcKind::IRC_KIND_POST_MESSAGE => {},
+            IrcKind::IRC_KIND_SEND_MESSAGE => {}, //meaningless to a client
+            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {}, //meaningless to a client
+            IrcKind::IRC_KIND_POST_MESSAGE => {
+                let pmp = packet.pmp.unwrap();
+                let room_name = pmp.room.to_owned();
+                let sender = pmp.sender.to_owned();
+                let message = pmp.get_message().to_owned();
+                cb.send(Box::new(move |s: &mut cursive::Cursive| {
+                        s.call_on_name(format!("{}-------------------------content", room_name).as_str(), |content: &mut TextView| {
+                            content.append(format!("{}: {}\n",sender,message));
+                        });
+                })).unwrap();
+            },
             IrcKind::IRC_KIND_DIRECT_MESSAGE => {},
             IrcKind::IRC_KIND_OFFER_FILE => {},
             IrcKind::IRC_KIND_ACCEPT_FILE => {},
             IrcKind::IRC_KIND_REJECT_FILE => {},
             IrcKind::IRC_KIND_FILE_TRANSFER => {},
-            IrcKind::IRC_KIND_CLIENT_DEPARTS => {},
-            IrcKind::IRC_KIND_SERVER_DEPARTS => {},
+            IrcKind::IRC_KIND_CLIENT_DEPARTS => {}, //meaningless to a client
+            IrcKind::IRC_KIND_SERVER_DEPARTS => {}, //Handled by Reader function
             _ => {println!("Can't send Unknown type packet!");continue;},
         }
     }
@@ -372,17 +388,20 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_QUERY_USER => {
                         //println!("Got query user packet.");
                         let query_result = QueryUserPacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(query_result.into()).await?;
                         //println!("{} is {}", &query_result.user_name, &query_result.status);
                     },
                     IrcKind::IRC_KIND_SEND_MESSAGE => {/*println!("Got send message packet...?");*/},
                     IrcKind::IRC_KIND_BROADCAST_MESSAGE => {/*println!("Got broadcast message packet...?");*/},
                     IrcKind::IRC_KIND_POST_MESSAGE => {
                         let new_message = PostMessagePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(new_message.into()).await?;
                         //println!("{}: {}", &new_message.sender, &new_message.message);
                     },
 
                     IrcKind::IRC_KIND_DIRECT_MESSAGE => {
                         let new_direct = DirectMessagePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(new_direct.into()).await?;
                         //println!("DM from {}: {}", &new_direct.target, &new_direct.message);
                     },
                     IrcKind::IRC_KIND_OFFER_FILE => {
@@ -428,4 +447,4 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
 }
 
 #[path = "curs.rs"]
-mod uilib; //Names the block of tests we import. The *name* of this library is set in Cargo.toml
+mod uilib;  //Include the UI specific code kept in a separate file.

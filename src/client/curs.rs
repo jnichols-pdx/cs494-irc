@@ -15,8 +15,8 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: tokio::sync:
     //means we must ensure names we use internally cannot collide with room names users may
     //provide. Names are at most 32 codepoints long, so by using 32+ character suffixes on names of
     //tab subregions they are ensured to never collide with any user provided room name.
-    let body = TextView::new(initial_text).with_name(format!("{}-------------------------content",name)).full_screen();
-    let listing = TextView::new("").with_name(format!("{}--------------------------people",name)).full_height().fixed_width(20);
+    let body = TextView::new(initial_text).with_name(format!("{}-------------------------content",name)).scrollable().full_screen();
+    let listing = TextView::new("").with_name(format!("{}--------------------------people",name)).scrollable().full_height().fixed_width(20);
 
     let input = EditView::new().on_submit(move |s,text| { 
            //Clone the channel inside the closure, then pass that clone to the function, otherwise
@@ -30,7 +30,7 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: tokio::sync:
 
     //The outermost layout view that will be directly contained by a tabview gets the raw room
     //name, permitting that user chosen name to show up in the tabview's user interface.
-    let tab_contents = LinearLayout::vertical().child(sideways).child(Panel::new(input)).full_screen().with_name(name);
+    let tab_contents = LinearLayout::vertical().child(sideways).child(Panel::new(input).min_height(3)).full_screen().with_name(name);
     tab_contents
 }
 
@@ -97,6 +97,11 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: tokio::sync:
             } else {
                 //Not a command, send text!
 
+                if is_dm {
+                } else {
+                    let outgoing = SendMessagePacket::new(&tab_name.to_string(), &text.to_string())?;
+                    tx_packet_out.blocking_send(outgoing.into())?;
+                }
 
                 //DEBUG: local echo:
                 s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
@@ -156,6 +161,7 @@ pub fn make_rooms_page(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSend
     let select = SelectView::<String>::new()
         .on_submit(move |s,n| {let _ = choose_room(s,n, & tx2);})
         .with_name("Rooms----------------------select")
+        .scrollable()
         .fixed_width(24)
         .full_height();
     let spacer = DummyView
