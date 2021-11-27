@@ -1198,7 +1198,10 @@ impl IrcPacket for RoomListingPacket {
 
         let length = u32_from_slice(&source[1..5]);
 
-        if length < 128 {
+        if length < 64 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+        if length % 64 != 0 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
@@ -1295,7 +1298,10 @@ impl IrcPacket for UserListingPacket {
 
         let length = u32_from_slice(&source[1..5]);
 
-        if length < 128 {
+        if length < 64 {
+            return Err(IrcError::FieldLengthIncorrect());
+        }
+        if length % 64 != 0 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
@@ -1413,8 +1419,7 @@ impl IrcPacket for QueryUserPacket {
 
         let new_username = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
 
-        let new_user_status: UserStatus = UserStatus::from(source[69]);
-        match new_user_status {
+        let new_user_status: UserStatus = UserStatus::from(source[69]); match new_user_status {
             UserStatus::NO_MATCH_USER_STATUS => Err(IrcError::CodeOutOfRange()),
             user_status => Ok(QueryUserPacket {
                 user_name: new_username,

@@ -577,6 +577,14 @@ fn list_rooms_packet_as_bytes() {
 
 #[test]
 fn room_listing_packet_from_bytes() {
+    let mut bytes_good_empty = BytesMut::with_capacity(69);
+    bytes_good_empty.put_u8(IrcKind::IRC_KIND_ROOM_LISTING as u8);
+    bytes_good_empty.put_u32(64);
+    bytes_good_empty.put_bytes(b'\0', 64);
+
+    let rlp_good_empty = RoomListingPacket::from_bytes(&bytes_good_empty);
+    assert!(rlp_good_empty.is_ok());
+
     let mut bytes_good1 = BytesMut::with_capacity(133);
     bytes_good1.put_u8(IrcKind::IRC_KIND_ROOM_LISTING as u8);
     bytes_good1.put_u32(64 * 2);
@@ -707,6 +715,18 @@ fn room_listing_packet_as_bytes() {
 
 #[test]
 fn user_listing_packet_from_bytes() {
+    let mut bytes_good_empty = BytesMut::with_capacity(69);
+    bytes_good_empty.put_u8(IrcKind::IRC_KIND_USER_LISTING as u8);
+    bytes_good_empty.put_u32(64);
+
+    //room identifier
+    bytes_good_empty.put_slice("Lobby".as_bytes());
+    let remain = 64 - "Lobby".len();
+    bytes_good_empty.put_bytes(b'\0', remain);
+
+    let ulp_good_empty = UserListingPacket::from_bytes(&bytes_good_empty);
+    assert!(ulp_good_empty.is_ok());
+
     let mut bytes_good1 = BytesMut::with_capacity(133);
     bytes_good1.put_u8(IrcKind::IRC_KIND_USER_LISTING as u8);
     bytes_good1.put_u32(128);
