@@ -258,8 +258,10 @@ async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
                         ulp4.push(&"Trumpfan69".into())?;
                         ulp4.push(&"BidenLovePeace".into())?;
                         ulp4.push(&"tiredofthisshit123123".into())?;
-                    let mut qup = QueryUserPacket::new(&"Pedro".into())?;
-                        qup.set_online();
+                    let mut qup1= QueryUserPacket::new(&"Pedro".into())?;
+                        qup1.set_online();
+                    let mut qup2= QueryUserPacket::new(&"Alejandro".into())?;
+                        qup2.set_offline();
                     let mut smp = SendMessagePacket::new(&"r/Politics".into(), &"Things happened today.".into())?;
                     let mut bmp = BroadcastMessagePacket::new(&"Server announcement: today is taco tuesday!".into())?;
                     let mut pmp1 = PostMessagePacket::new(&"bovine_history".into(), &"Ben".into(), &"yipppee kayay!".into())?;
@@ -293,10 +295,11 @@ async fn spam_user<'a,'b,'c>(dude: &mut Client<'b,'c>) -> Result<'a, ()> {
                     dude.connection.write(&ulp.as_bytes()).await?;
                     dude.connection.write(&ulp2.as_bytes()).await?;
                     dude.connection.write(&ulp3.as_bytes()).await?;
-                    dude.connection.write(&qup.as_bytes()).await?;
+                    dude.connection.write(&qup1.as_bytes()).await?;
                     dude.connection.write(&smp.as_bytes()).await?;
                     dude.connection.write(&bmp.as_bytes()).await?;
                     dude.connection.write(&pmp1.as_bytes()).await?;
+                    dude.connection.write(&qup2.as_bytes()).await?;
                     dude.connection.write(&pmp2.as_bytes()).await?;
                     dude.connection.write(&dmp.as_bytes()).await?;
                     dude.connection.write(&ofp.as_bytes()).await?;

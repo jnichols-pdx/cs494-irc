@@ -196,9 +196,7 @@ async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<
 
 async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSendPack>,tx_packet_out: mpsc::Sender<irclib::SyncSendPack>)
 {
-
     while let Some(packet) = rx_from_main.recv().await {
-        //println!("send me packets!");
         match packet.contained_kind {
             IrcKind::IRC_KIND_ERR => {}, //Handled by Reader function
             IrcKind::IRC_KIND_NEW_CLIENT => {}, //meaningless to a client
@@ -238,7 +236,18 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
                 })).unwrap();
             },
 
-            IrcKind::IRC_KIND_QUERY_USER => {},
+            IrcKind::IRC_KIND_QUERY_USER => {
+                let qup = packet.qup.unwrap();
+                let user_name = qup.user_name.to_owned();
+                let status = qup.status.to_owned();
+                cb.send(Box::new(move |s: &mut cursive::Cursive| {
+                    s.add_layer(
+                        Dialog::text(format!("{} is {}.", user_name, status))
+                            .title("User Status")
+                            .dismiss_button("Noted")
+                        );
+                })).unwrap();
+            },
             IrcKind::IRC_KIND_SEND_MESSAGE => {}, //meaningless to a client
             IrcKind::IRC_KIND_BROADCAST_MESSAGE => {}, //meaningless to a client
             IrcKind::IRC_KIND_POST_MESSAGE => {
@@ -309,8 +318,6 @@ async fn shutdown_monitor<'a>(running: Arc<AtomicBool>, tx_packet_out: mpsc::Sen
         wait_period.tick().await;
         if !running.load(Ordering::SeqCst) {
             //we've been asked to close - so send some cleanup packets!
-            //println!("ctrl-c shutdown");
-
             let outgoing = ClientDepartsPacket::new(&"Client going outside!".to_string())
                 .expect("Error packets should be infallible on creation");
             tx_packet_out.send(outgoing.into()).await?;
@@ -390,7 +397,6 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_LEAVE_ROOM => {/*println!("Got leave room packet...?");*/},
                     IrcKind::IRC_KIND_LIST_ROOMS => {/*println!("Got list rooms packet...?");*/},
                     IrcKind::IRC_KIND_ROOM_LISTING => {
-                        //println!("Got room listing packet.");
                         let room_list = RoomListingPacket::from_bytes(&buffer[..])?;
                         tx_to_responder.send(room_list.into()).await?;
                     },
@@ -399,23 +405,19 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                         tx_to_responder.send(user_list.into()).await?;
                     },
                     IrcKind::IRC_KIND_QUERY_USER => {
-                        //println!("Got query user packet.");
                         let query_result = QueryUserPacket::from_bytes(&buffer[..])?;
                         tx_to_responder.send(query_result.into()).await?;
-                        //println!("{} is {}", &query_result.user_name, &query_result.status);
                     },
                     IrcKind::IRC_KIND_SEND_MESSAGE => {/*println!("Got send message packet...?");*/},
                     IrcKind::IRC_KIND_BROADCAST_MESSAGE => {/*println!("Got broadcast message packet...?");*/},
                     IrcKind::IRC_KIND_POST_MESSAGE => {
                         let new_message = PostMessagePacket::from_bytes(&buffer[..])?;
                         tx_to_responder.send(new_message.into()).await?;
-                        //println!("{}: {}", &new_message.sender, &new_message.message);
                     },
 
                     IrcKind::IRC_KIND_DIRECT_MESSAGE => {
                         let new_direct = DirectMessagePacket::from_bytes(&buffer[..])?;
                         tx_to_responder.send(new_direct.into()).await?;
-                        //println!("DM from {}: {}", &new_direct.target, &new_direct.message);
                     },
                     IrcKind::IRC_KIND_OFFER_FILE => {
                         //println!("Got offer file packet.");
@@ -429,9 +431,7 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_FILE_TRANSFER => {
                       //  println!("Got file transfer packet.");
                     },
-                    IrcKind::IRC_KIND_CLIENT_DEPARTS => {
-                      //  println!("Got client departs packet...?");
-                    },
+                    IrcKind::IRC_KIND_CLIENT_DEPARTS => { println!("Got client departs packet...?"); },
                     IrcKind::IRC_KIND_SERVER_DEPARTS => {
                         let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
                         ret_string = format!("Server shutting down with this message: \"{}\"", server_leaving.get_message());

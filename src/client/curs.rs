@@ -93,6 +93,15 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                             None => (),
                         };
                     },
+                    Some("/status") => {
+                        match tokens.next() {
+                            Some(user_name) => {
+                                let outgoing = QueryUserPacket::new(&user_name.to_string())?;
+                                tx_packet_out.blocking_send(outgoing.into())?;
+                            },
+                            None => (),
+                        };
+                    },
                     Some("/leave") => {
                         if !is_dm {
                             //If this is a chat room tab, Tell the server we are leaving the room
