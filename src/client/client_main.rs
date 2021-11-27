@@ -154,7 +154,7 @@ async fn main() -> Result<'static, ()>{
 
 }
 
-fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::oneshot::Sender<cursive::CbSink>, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>, ui_active: Arc<AtomicBool>)
+fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: oneshot::Sender<cursive::CbSink>, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>, ui_active: Arc<AtomicBool>)
 {
 	let mut siv = cursive::default();
     let cb = siv.cb_sink().clone();
@@ -183,7 +183,7 @@ fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::ones
 
 }
 
-async fn pulse<'a>(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()>
+async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()>
 {
     let mut wait_period = time::interval(Duration::from_millis(5000));
     loop {
@@ -193,7 +193,7 @@ async fn pulse<'a>(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack
     }
 }
 
-async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSendPack>,tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>)
+async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSendPack>,tx_packet_out: mpsc::Sender<irclib::SyncSendPack>)
 {
 
     while let Some(packet) = rx_from_main.recv().await {
@@ -283,7 +283,7 @@ async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>)  -> Result<'a,()>
 Ok(())
 }
 
-async fn shutdown_monitor<'a>(running: Arc<AtomicBool>, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a,()>
+async fn shutdown_monitor<'a>(running: Arc<AtomicBool>, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a,()>
 {
     let mut wait_period = time::interval(Duration::from_millis(100));
     loop {
@@ -333,7 +333,7 @@ async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_
     Ok(())
 }
 
-async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, String> {
+async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, String> {
     //println!("in fn");
     let mut peeker = [0; 5];
     let mut bytes_peeked;

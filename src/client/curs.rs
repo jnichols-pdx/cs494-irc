@@ -6,9 +6,10 @@ use cursive::traits::With;
 use cursive::Cursive;
 use cursive::event::{Key};
 use irclib::{*};
+use tokio::sync::mpsc;
 
 
-pub fn make_room(name: String, initial_text: String, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
+pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
     //We do want to be able to address the subregions of a tab later, however the field used for
     //the title of a tab in the cursive-tabs library is also the field used by the cursive library
     //for addressing views by name. As we want to set a tab's title to the name of a room, this
@@ -34,7 +35,7 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: tokio::sync:
     tab_contents
 }
 
-pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>, is_dm: bool) -> Result<'a, ()>{
+pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>, is_dm: bool) -> Result<'a, ()>{
   
     //where are we?
     let current_tab = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
@@ -153,7 +154,7 @@ pub fn focus_input_line(s: &mut Cursive){
 
 }
 
-pub fn make_rooms_page(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
+pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
 
     let mut tx1 = tx_packet_out.clone();
     let mut tx2 = tx_packet_out.clone();
@@ -181,10 +182,10 @@ pub fn make_rooms_page(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSend
     pane
 
 }
-pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let txf = tx_packet_out.clone();
     let txb = tx_packet_out.clone();
-    fn send_new_packet<'a>(s: &mut Cursive, new_room_name: &str, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>){
+    fn send_new_packet<'a>(s: &mut Cursive, new_room_name: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>){
                 match EnterRoomPacket::new(&new_room_name.to_string()) {
                    Ok(out) => {let _ = tx_packet_out.blocking_send(out.into());}, //TODO: error message on invalid roomname
                    Err(_) => (),
@@ -217,13 +218,13 @@ pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  tokio::sync::mpsc::S
 }
 
 
-pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let outgoing = EnterRoomPacket::new(&name.to_string())?;
     tx_packet_out.blocking_send(outgoing.into())?;
     Ok(())
 }
 
-pub fn choose_room_button<'a>(s: &mut Cursive, tx_packet_out: & tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+pub fn choose_room_button<'a>(s: &mut Cursive, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
 
     let select_ref = s.find_name::<SelectView<String>>("Rooms----------------------select").unwrap();
     match select_ref.selection() {
