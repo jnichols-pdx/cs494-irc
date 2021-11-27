@@ -167,11 +167,6 @@ fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::ones
     let mut panel = TabPanel::new();
     let tx1 = tx_packet_out.clone();
     panel.add_tab(make_rooms_page(tx1));
-    /*panel.add_tab(make_room("First".into(),"First room".into()));
-    panel.add_tab(make_room("Second".into(),"Wait one".into()));
-    panel.add_tab(make_room("DM: Your_MOM".into(),"Hello deary".into()));
-    panel.add_tab(make_room("R/Politics".into(),"Butts butts butts butts\nbutts butts\n\tbutts yeah?".into()));
-    panel.add_tab(make_room("Third".into(),"That's just, like, your opinion man.".into()));*/
 
     let panelv = panel.with_name("TABS__________________________32+").full_screen();
 
@@ -223,9 +218,10 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
             IrcKind::IRC_KIND_USER_LISTING => {
                 let ulp = packet.ulp.unwrap();
                 let room_name = ulp.room.to_owned();
+                let txr = tx_packet_out.clone();
                 cb.send(Box::new(move |s: &mut cursive::Cursive| {
                     s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
-                        tab_controller.add_tab(make_room(room_name.into(),"".into()));
+                        tab_controller.add_tab(make_room(room_name.into(),"".into(), txr));
                     });
                     s.call_on_name(format!("{}--------------------------people", ulp.room).as_str(), |users_list: &mut TextView| {
                         for user in ulp.users{
