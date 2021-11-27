@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 
 use cursive::Cursive;
-use cursive::CursiveRunnable;
+//use cursive::CursiveRunnable;
 use cursive::views::TextView;
 use cursive_tabs::TabPanel;
 use cursive::view::*;
@@ -125,19 +125,28 @@ async fn main() -> Result<'static, ()>{
     }
 
     if ui_active.load(Ordering::SeqCst) {
-        cb1.send(Box::new(move |s: &mut cursive::Cursive| {
+        //UI thread hasn't exited, but we know we want to quit.
+        //Attempt to have the UI give the user an error prompt about the reason we are now
+        //disconnected from the server.
+        let could_prompt = cb1.send(Box::new(move |s: &mut cursive::Cursive| {
                     s.add_layer(
                         Dialog::text(offline_message)
                             .title("Disconnected")
                             .button("Quit", |s| s.quit()),
                     );
-        })).unwrap(); 
-        let mut wait_period = time::interval(Duration::from_millis(100));
-        loop {
-            wait_period.tick().await;
-            if !ui_active.load(Ordering::SeqCst) {
-                break;
-            }
+        }));
+
+        match could_prompt {
+            Ok(_) => { //UI was still responsive - wait for the user to acknowledge the disconnect dialog prompt.
+                let mut wait_period = time::interval(Duration::from_millis(100));
+                loop {
+                    wait_period.tick().await;
+                    if !ui_active.load(Ordering::SeqCst) {
+                        break;
+                    }
+                }
+            },
+            Err(_) => {}, //UI wasn't responsive (locked up?) - fall through and exit program.
         }
     }
 
@@ -156,6 +165,8 @@ fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::ones
 	siv.add_global_callback(cursive::event::Event::CtrlChar('q'), |s| s.quit());
 
     let mut panel = TabPanel::new();
+    let tx1 = tx_packet_out.clone();
+    panel.add_tab(make_rooms_page(tx1));
     /*panel.add_tab(make_room("First".into(),"First room".into()));
     panel.add_tab(make_room("Second".into(),"Wait one".into()));
     panel.add_tab(make_room("DM: Your_MOM".into(),"Hello deary".into()));
@@ -191,7 +202,52 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
 {
 
     while let Some(packet) = rx_from_main.recv().await {
-        println!("parse me packets!");
+        //println!("send me packets!");
+        match packet.contained_kind {
+            IrcKind::IRC_KIND_ERR => {},
+            IrcKind::IRC_KIND_NEW_CLIENT => {},
+            IrcKind::IRC_KIND_HEARTBEAT => {},
+            IrcKind::IRC_KIND_ENTER_ROOM => {},
+            IrcKind::IRC_KIND_LEAVE_ROOM => {},
+            IrcKind::IRC_KIND_LIST_ROOMS => {
+                },
+            IrcKind::IRC_KIND_ROOM_LISTING => {
+                let rlp = packet.rlp.unwrap();
+                    cb.send(Box::new(move |s: &mut cursive::Cursive| {
+                        s.call_on_name("Rooms----------------------select", |select: &mut SelectView<String>| {
+                            select.clear();
+                            select.add_all_str(rlp.rooms.into_iter());
+                        });
+                    })).unwrap();
+            },
+            IrcKind::IRC_KIND_USER_LISTING => {
+                let ulp = packet.ulp.unwrap();
+                let room_name = ulp.room.to_owned();
+                cb.send(Box::new(move |s: &mut cursive::Cursive| {
+                    s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
+                        tab_controller.add_tab(make_room(room_name.into(),"".into()));
+                    });
+                    s.call_on_name(format!("{}--------------------------people", ulp.room).as_str(), |users_list: &mut TextView| {
+                        for user in ulp.users{
+                            users_list.append(format!("{}\n", user));
+                        }
+                    });
+                })).unwrap();
+            },
+
+            IrcKind::IRC_KIND_QUERY_USER => {},
+            IrcKind::IRC_KIND_SEND_MESSAGE => {},
+            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {},
+            IrcKind::IRC_KIND_POST_MESSAGE => {},
+            IrcKind::IRC_KIND_DIRECT_MESSAGE => {},
+            IrcKind::IRC_KIND_OFFER_FILE => {},
+            IrcKind::IRC_KIND_ACCEPT_FILE => {},
+            IrcKind::IRC_KIND_REJECT_FILE => {},
+            IrcKind::IRC_KIND_FILE_TRANSFER => {},
+            IrcKind::IRC_KIND_CLIENT_DEPARTS => {},
+            IrcKind::IRC_KIND_SERVER_DEPARTS => {},
+            _ => {println!("Can't send Unknown type packet!");continue;},
+        }
     }
 }
 
@@ -203,7 +259,7 @@ async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>)  -> Result<'a,()>
         wait_period.tick().await;
         if found_pulse.load(Ordering::SeqCst) {
             seconds_since_heartbeat = 0;
-            found_pulse.store(false, Ordering::SeqCst); //TODO: re-enable heartbeats
+            found_pulse.store(false, Ordering::SeqCst);
         }else {
             if seconds_since_heartbeat >= 30 {
                 break;
@@ -311,16 +367,11 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_ROOM_LISTING => {
                         //println!("Got room listing packet.");
                         let room_list = RoomListingPacket::from_bytes(&buffer[..])?;
-                        for room in room_list.rooms {
-                         //   println!("-{}",room);
-                        };
+                        tx_to_responder.send(room_list.into()).await?;
                     },
                     IrcKind::IRC_KIND_USER_LISTING => {
-                        //println!("Got user listing packet.");
                         let user_list = UserListingPacket::from_bytes(&buffer[..])?;
-                        for user in user_list.users{
-                            //println!("-{}", user);
-                        };
+                        tx_to_responder.send(user_list.into()).await?;
                     },
                     IrcKind::IRC_KIND_QUERY_USER => {
                         //println!("Got query user packet.");

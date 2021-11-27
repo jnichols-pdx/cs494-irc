@@ -4,6 +4,7 @@ use cursive::view::*;
 use cursive::views::*;
 //use cursive::traits::*;
 use cursive::Cursive;
+use irclib::{*};
 
 
 pub fn make_room(name: String, initial_text: String) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
@@ -47,12 +48,23 @@ pub fn accept_input(s: &mut Cursive, text: &str){
     };
 
 }
+pub fn switch_prev(s: &mut Cursive){
+    s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
+            tab_controller.prev();
+    });
+
+    focus_input_line(s);
+}
 
 pub fn switch_next(s: &mut Cursive){
     s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
             tab_controller.next();
     });
 
+    focus_input_line(s);
+}
+
+pub fn focus_input_line(s: &mut Cursive){
     let current_tab_opt_opt = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
         let current_tab_opt = tab_controller.active_tab();
         match current_tab_opt {
@@ -61,35 +73,59 @@ pub fn switch_next(s: &mut Cursive){
         }
     });
 
-    //Call_on_name returns Option, as does the call to active_tab. We expect to always have a
-    //tabview that call_on_name can access, so unwrap the outer Option before passing to match.
     match current_tab_opt_opt.unwrap() {
         Some(tab_name) => {
-            s.focus_name(format!("{}---------------------------input", tab_name).as_str()).expect("Input couldn't be found");
+            match s.focus_name(format!("{}---------------------------input", tab_name).as_str()) {
+                Ok(_) => {},
+                Err(_) => {},
+            };
         },
         None => (),
     };
+
 }
 
-pub fn switch_prev(s: &mut Cursive){
-    s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
-            tab_controller.prev();
-    });
+pub fn make_rooms_page(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
 
-    let current_tab_opt_opt = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
-        let current_tab_opt = tab_controller.active_tab();
-        match current_tab_opt {
-            Some(tab_name) => Some(tab_name.to_owned()),
-            None => None,
-        }
-    });
+    let mut tx1 = tx_packet_out.clone();
+    let mut tx2 = tx_packet_out.clone();
+    let select = SelectView::<String>::new()
+        .on_submit(move |s,n| {let _ = choose_room(s,n, & tx2);})
+        .with_name("Rooms----------------------select")
+        .fixed_width(24)
+        .full_height();
+    let spacer = DummyView
+    .full_height();
+    let buttons = LinearLayout::vertical()
+        .child(spacer)
+        .child(Button::new("Join", move |s| {let _ = choose_room_button(s,& tx1);}));
 
-    //Call_on_name returns Option, as does the call to active_tab. We expect to always have a
-    //tabview that call_on_name can access, so unwrap the outer Option before passing to match.
-    match current_tab_opt_opt.unwrap() {
-        Some(tab_name) => {
-            s.focus_name(format!("{}---------------------------input", tab_name).as_str()).expect("Input couldn't be found");
+    let pane = LinearLayout::horizontal()
+        .child(Panel::new(select))
+        .child(buttons)
+        .full_height()
+        .with_name("<Rooms>");
+
+    pane
+
+}
+
+pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+    let outgoing = EnterRoomPacket::new(&name.to_string())?;
+    tx_packet_out.blocking_send(outgoing.into())?;
+    Ok(())
+}
+
+pub fn choose_room_button<'a>(s: &mut Cursive, tx_packet_out: & tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+
+    let select_ref = s.find_name::<SelectView<String>>("Rooms----------------------select").unwrap();
+    match select_ref.selection() {
+        Some(n) =>{
+            let outgoing = EnterRoomPacket::new(&n.to_string())?;
+            tx_packet_out.blocking_send(outgoing.into())?;
         },
-        None => (),
+        None =>{}
     };
+    Ok(())
 }
+
