@@ -5,6 +5,7 @@
 use irclib::{*};
 
 use std::env;
+use std::io::{Write,stderr};
 use std::error::Error;
 use num_enum::FromPrimitive;
 
@@ -352,22 +353,16 @@ async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_
 }
 
 async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, String> {
-    //println!("in fn");
     let mut peeker = [0; 5];
     let mut bytes_peeked;
     let mut ret_string = "Unexpected connection closure.".to_string();
     loop {
-    //println!("in loop");
         bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
-            //println!("------");
-            //println!("{}.{}.{}.{}.{}", peeker[0],peeker[1],peeker[2],peeker[3],peeker[4]);
             let kindbyte = peeker[0];
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
             let mut buffer = vec![0; msg_len + 5];
             let bytes_read = con.read(&mut buffer).await?;
-            //println!("got {} bytes, expected {}", bytes_read, msg_len +5);
-            //println!("{:?}", buffer);
             if bytes_read == msg_len + 5 {
                 let kind_raw = IrcKind::from(buffer[0]);
                 match  kind_raw {
@@ -438,14 +433,12 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                       //  println!("Got client departs packet...?");
                     },
                     IrcKind::IRC_KIND_SERVER_DEPARTS => {
-                     //   println!("Got server departs packet.");
                         let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
-                      //  println!("Goodbye: {}", server_leaving.get_message());
                         ret_string = format!("Server shutting down with this message: \"{}\"", server_leaving.get_message());
                         break;
                     },
                     _ => {
-                            println!("Error: Unknown packet recieved:\n{:?}",&buffer[0..bytes_read]);
+                            let _ =  writeln!(stderr(),"Error: Unknown packet recieved:\n{:?}\n",&buffer[0..bytes_read]);
                             let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)
                                 .expect("Error packets should be infallible on creation");
                             tx_packet_out.send(error_notice.into()).await?;
