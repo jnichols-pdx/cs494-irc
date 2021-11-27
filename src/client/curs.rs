@@ -2,8 +2,9 @@ use cursive::views::TextView;
 use cursive_tabs::TabPanel;
 use cursive::view::*;
 use cursive::views::*;
-//use cursive::traits::*;
+use cursive::traits::With;
 use cursive::Cursive;
+use cursive::event::{Key};
 use irclib::{*};
 
 
@@ -201,7 +202,11 @@ pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  tokio::sync::mpsc::S
                 let txi = txb.clone();
                 let _ = send_new_packet(s,&new_room_name.to_string(), txi);
             })
-        ); //TODO: wishlist item - find a way to have the escape key cancel this dialog
+            .wrap_with(OnEventView::new)
+            .on_pre_event(Key::Esc, |s| {
+                s.pop_layer();
+            })
+        );
     Ok(())
 }
 
