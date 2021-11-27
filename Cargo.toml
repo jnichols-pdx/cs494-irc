@@ -34,6 +34,6 @@ path = "src/client/client_main.rs"
 name = "irclib"
 path = "src/lib.rs"
 
-[[bin]]
-name = "curs"
-path = "src/curs.rs"
+#[[bin]]
+#name = "curs"
+#path = "src/curs.rs"

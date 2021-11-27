@@ -26,32 +26,35 @@ use cursive_tabs::TabPanel;
 use cursive::view::*;
 use cursive::views::*;
 use std::thread;
-
+use crate::uilib::*;
 
 #[tokio::main]
 async fn main() -> Result<'static, ()>{
     let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || { 
-            r.store(false, Ordering::SeqCst);
-        }).expect("Error setting Ctrl-C handler");
+    let r1 = running.clone();
     let r2 = running.clone();
     let r3 = running.clone();
+    ctrlc::set_handler(move || { 
+            r1.store(false, Ordering::SeqCst);
+        }).expect("Error setting Ctrl-C handler");
+
+    let ui_active= Arc::new(AtomicBool::new(true));
+    let u1 = ui_active.clone();
 
     let found_pulse = Arc::new(AtomicBool::new(true));
     let fp = found_pulse.clone();
 
     let mut arg_list = env::args().skip(1);
     let my_name = arg_list.next().unwrap();
-    println!("Hello, world! [client]:{:?}",my_name);
+    //println!("Hello, world! [client]:{:?}",my_name);
 
     let host;
     if arg_list.len() > 0 {
         host = arg_list.next().unwrap();
-        println!("Connecting to host {}", host);
+        //println!("Connecting to host {}", host);
     } else {
         host = "192.168.2.5:17734".to_string();
-        println!("Connecting to default host {}", host);
+        //println!("Connecting to default host {}", host);
     }
 
     let mut con = TcpStream::connect(host).await?;
@@ -66,6 +69,8 @@ async fn main() -> Result<'static, ()>{
     let tx2 = tx_to_server.clone();
     let tx3 = tx_to_server.clone();
     let tx4 = tx_to_server.clone();
+    let tx5 = tx_to_server.clone();
+    let tx6 = tx_to_server.clone();
 
     //Oneshot to retrieve a sender to the Cursive UI's callback channel from the kickstart
     //function.
@@ -73,7 +78,7 @@ async fn main() -> Result<'static, ()>{
     
     //Start the console UI in it's own OS thread (doesn't play nice with tokio's
     //task management green threads).
-    let ui_thread = thread::spawn(move || {ui_kickstart(r3, tx_cb_to_main, tx2)});
+    let ui_thread = thread::spawn(move || {ui_kickstart(r3, tx_cb_to_main, tx2, u1)});
 
     //Retrieve a handle to the UI's callback endpoint, so we may tell it to react to incoming
     //packets.
@@ -82,17 +87,25 @@ async fn main() -> Result<'static, ()>{
         Ok(v) => {cb_handle= v},
         Err(e) => {println!("Got Err instead of handle{:?}",e);return Err(IrcError::PacketMismatch());},
     }
+    let cb1 = cb_handle.clone();
 
     //Split the TcpStream into reader and writer, pass each to their own asynchronous task
     let (tcp_in, tcp_out) = con.into_split();
+
     //Spawn asynchronous tokio tasks to watch for shutdown triggers, receive messages from, and
     //send messages to the IRC server.
-    let stop_task = tokio::spawn(shutdown_monitor(r2));
-    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder, fp, tx4)); 
-    let responder_task = tokio::spawn(responder(cb_handle,ui_rx)); 
+    let responder_task = tokio::spawn(responder(cb_handle,ui_rx, tx5)); 
     let send_task = tokio::spawn(writer(tcp_out ,outgoing_rx));
     let heartbeat_task = tokio::spawn(pulse(tx3));
+    let read_task = tokio::spawn(reader(tcp_in, tx_to_responder, fp, tx4)); 
     let watchdog_task = tokio::spawn(pulse_monitor(found_pulse));
+    let stop_task = tokio::spawn(shutdown_monitor(r2, tx6));
+
+
+    let first_room_listing = ListRoomsPacket::new()?;
+    tx_to_server.send(first_room_listing.into()).await?;
+
+    let offline_message; //Message to show user when the server goes down.
 
     //Polls the tokio tasks to keep them operating, ends all tasks when one completes
     //stop_task will complete when the Cursive UI event loop exits (explicit quit, or catches ctrl-c)
@@ -103,26 +116,63 @@ async fn main() -> Result<'static, ()>{
     //send_task will complete with the outgoing network connection to the server closes.
     //watchdog_task will complete if the server fails to send heartbeats for 30 seconds.
     tokio::select!{
-        out = read_task => {println!("We stopping with {:?}",out?);},
-        _ = responder_task => {println!("responder died:(");},
-        _ = stop_task => {println!("CTL-c out of the select");},
-        _ = send_task => {println!("Outgoing channel died...");},
-        _ = watchdog_task => {println!("Server heartbeat missing for 30 seconds. Exiting.");},
+        out = read_task => {offline_message = format!("{}",out??);},
+        out = responder_task => {offline_message = format!("Response: {:?}",out?);},
+        _ = stop_task => {offline_message = "User asked to quit.".into();},
+        _ = send_task => {offline_message = "Outgoing channel died...".into();},
+        _ = heartbeat_task => {offline_message = "Internal Error (client keepalive failed)".into();},
+        _ = watchdog_task => {offline_message = "Server hasn't responded in 30 seconds.".into();},
+    }
+
+    if ui_active.load(Ordering::SeqCst) {
+        cb1.send(Box::new(move |s: &mut cursive::Cursive| {
+                    s.add_layer(
+                        Dialog::text(offline_message)
+                            .title("Disconnected")
+                            .button("Quit", |s| s.quit()),
+                    );
+        })).unwrap(); 
+        let mut wait_period = time::interval(Duration::from_millis(100));
+        loop {
+            wait_period.tick().await;
+            if !ui_active.load(Ordering::SeqCst) {
+                break;
+            }
+        }
     }
 
     Ok(())
 
 }
 
-fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::oneshot::Sender<cursive::CbSink>, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>)
+fn ui_kickstart(running: Arc<AtomicBool>, tx_return_cb_handle: tokio::sync::oneshot::Sender<cursive::CbSink>, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>, ui_active: Arc<AtomicBool>)
 {
 	let mut siv = cursive::default();
     let cb = siv.cb_sink().clone();
     tx_return_cb_handle.send(cb).expect("Couldn't pass back cb handle");
 
+    //Global callback to exit the program, will need to change this to pass a message to our core
+    //program code to do a graceful disconnect.
+	siv.add_global_callback(cursive::event::Event::CtrlChar('q'), |s| s.quit());
+
+    let mut panel = TabPanel::new();
+    /*panel.add_tab(make_room("First".into(),"First room".into()));
+    panel.add_tab(make_room("Second".into(),"Wait one".into()));
+    panel.add_tab(make_room("DM: Your_MOM".into(),"Hello deary".into()));
+    panel.add_tab(make_room("R/Politics".into(),"Butts butts butts butts\nbutts butts\n\tbutts yeah?".into()));
+    panel.add_tab(make_room("Third".into(),"That's just, like, your opinion man.".into()));*/
+
+    let panelv = panel.with_name("TABS__________________________32+").full_screen();
+
+    siv.add_fullscreen_layer(panelv);
+    
+    //Callbacks to capture ctrl-right and ctrl-left and switch tabs accordingly.
+	siv.add_global_callback(cursive::event::Event::Ctrl(cursive::event::Key::Left),switch_prev);
+	siv.add_global_callback(cursive::event::Event::Ctrl(cursive::event::Key::Right),switch_next);
 
     siv.run();
 
+    ui_active.store(false, Ordering::SeqCst);
     running.store(false, Ordering::SeqCst);
 
 }
@@ -137,14 +187,15 @@ async fn pulse<'a>(tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack
     }
 }
 
-async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSendPack>)
+async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSendPack>,tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>)
 {
 
     while let Some(packet) = rx_from_main.recv().await {
         println!("parse me packets!");
-    } }
+    }
+}
 
-async fn pulse_monitor(found_pulse: Arc<AtomicBool>)
+async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>)  -> Result<'a,()>
 {
     let mut seconds_since_heartbeat = 0 as u8;
     let mut wait_period = time::interval(Duration::from_millis(1000));
@@ -152,7 +203,7 @@ async fn pulse_monitor(found_pulse: Arc<AtomicBool>)
         wait_period.tick().await;
         if found_pulse.load(Ordering::SeqCst) {
             seconds_since_heartbeat = 0;
-            found_pulse.store(false, Ordering::SeqCst);
+            found_pulse.store(false, Ordering::SeqCst); //TODO: re-enable heartbeats
         }else {
             if seconds_since_heartbeat >= 30 {
                 break;
@@ -161,35 +212,31 @@ async fn pulse_monitor(found_pulse: Arc<AtomicBool>)
         }
     }
 
-
+Ok(())
 }
 
-async fn shutdown_monitor(running: Arc<AtomicBool>)
+async fn shutdown_monitor<'a>(running: Arc<AtomicBool>, tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a,()>
 {
     let mut wait_period = time::interval(Duration::from_millis(100));
     loop {
-
         wait_period.tick().await;
         if !running.load(Ordering::SeqCst) {
             //we've been asked to close - so send some cleanup packets!
-            println!("ctrl-c shutdown");
+            //println!("ctrl-c shutdown");
 
-            //TODO: communication accross threads for sending...
-            //let outgoing = ClientDepartsPacket::new(&"Client going to vegas".to_string())?;
-            //    con.write(&outgoing.as_bytes()).await?;
-            
+            let outgoing = ClientDepartsPacket::new(&"Client going outside!".to_string())
+                .expect("Error packets should be infallible on creation");
+            tx_packet_out.send(outgoing.into()).await?;
             break;
         }
-
-        //TODO: also check for communication from Cursive :3
     }
-
+    Ok(())
 }
 
 async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_send: mpsc::Receiver<SyncSendPack>) -> Result<'a,()> {
     let mut bytes_to_go;
     while let Some(sync_send_packet) = rx_packets_to_send.recv().await {
-        println!("send me packets!");
+        //println!("send me packets!");
         match sync_send_packet.contained_kind {
             IrcKind::IRC_KIND_ERR => {bytes_to_go = sync_send_packet.errp.unwrap().as_bytes();}
             IrcKind::IRC_KIND_NEW_CLIENT => {bytes_to_go = sync_send_packet.ncp.unwrap().as_bytes();}
@@ -218,10 +265,11 @@ async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_
     Ok(())
 }
 
-async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: tokio::sync::mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, String> {
     //println!("in fn");
     let mut peeker = [0; 5];
     let mut bytes_peeked;
+    let mut ret_string = "Unexpected connection closure.".to_string();
     loop {
     //println!("in loop");
         bytes_peeked = con.peek(&mut peeker).await?;
@@ -237,87 +285,100 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
             if bytes_read == msg_len + 5 {
                 let kind_raw = IrcKind::from(buffer[0]);
                 match  kind_raw {
-                    IrcKind::IRC_KIND_NEW_CLIENT => { println!("Got New client packet...?");},
                     IrcKind::IRC_KIND_ERR => {
                         let my_error = ErrorPacket::from_bytes(&buffer[0..6])?;
-
                         match my_error.error_code {
-                            IrcErrCode::IRC_ERR_UNKNOWN => { println!("Bogus! Server's confused (we received Error: Unknown)");},
-                            IrcErrCode::IRC_ERR_ILLEGAL_KIND => { println!("Bogus! Illegal Kind!");},
-                            IrcErrCode::IRC_ERR_ILLEGAL_LENGTH => { println!("Bogus! Illegal Length!");},
-                            IrcErrCode::IRC_ERR_NAME_IN_USE => { println!("Bogus! That name's taken!");},
-                            IrcErrCode::IRC_ERR_ILLEGAL_NAME => { println!("Bogus! Illegal Name!");},
-                            IrcErrCode::IRC_ERR_ILLEGAL_MESSAGE => { println!("Bogus! Illegal Message!");},
-                            IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER => { println!("Bogus! Illegal Transfer!");},
-                            IrcErrCode::IRC_ERR_TOO_MANY_USERS => { println!("Bogus! Slashdoted! (too many users)");},
-                            IrcErrCode::IRC_ERR_TOO_MANY_ROOMS => { println!("Bogus! Too Many Rooms!");},
+                            IrcErrCode::IRC_ERR_UNKNOWN => { ret_string = "Bogus! Server's confused (we received Error: Unknown)".into();},
+                            IrcErrCode::IRC_ERR_ILLEGAL_KIND => { ret_string = "Bogus! Illegal Kind!".into();},
+                            IrcErrCode::IRC_ERR_ILLEGAL_LENGTH => { ret_string = "Bogus! Illegal Length!".into();},
+                            IrcErrCode::IRC_ERR_NAME_IN_USE => { ret_string = "Bogus! That name's taken!".into();},
+                            IrcErrCode::IRC_ERR_ILLEGAL_NAME => { ret_string = "Bogus! Illegal Name!".into();},
+                            IrcErrCode::IRC_ERR_ILLEGAL_MESSAGE => { ret_string = "Bogus! Illegal Message!".into();},
+                            IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER => { ret_string = "Bogus! Illegal Transfer!".into();},
+                            IrcErrCode::IRC_ERR_TOO_MANY_USERS => { ret_string = "Bogus! Slashdoted! (too many users)".into();},
+                            IrcErrCode::IRC_ERR_TOO_MANY_ROOMS => { ret_string = "Bogus! Too Many Rooms!".into();},
                             _ => (),
                         }
                         break;
                     },
+                    IrcKind::IRC_KIND_NEW_CLIENT => {/*println!("Got New client packet...?");*/},
                     IrcKind::IRC_KIND_HEARTBEAT => {
                         found_pulse.store(true, Ordering::SeqCst);
                     },
-                    IrcKind::IRC_KIND_ENTER_ROOM => {println!("Got enter room packet...?");},
-                    IrcKind::IRC_KIND_LEAVE_ROOM => {println!("Got leave room packet...?");},
-                    IrcKind::IRC_KIND_LIST_ROOMS => {println!("Got list rooms packet...?");},
+                    IrcKind::IRC_KIND_ENTER_ROOM => {/*println!("Got enter room packet...?");*/},
+                    IrcKind::IRC_KIND_LEAVE_ROOM => {/*println!("Got leave room packet...?");*/},
+                    IrcKind::IRC_KIND_LIST_ROOMS => {/*println!("Got list rooms packet...?");*/},
                     IrcKind::IRC_KIND_ROOM_LISTING => {
-                        println!("Got room listing packet.");
+                        //println!("Got room listing packet.");
                         let room_list = RoomListingPacket::from_bytes(&buffer[..])?;
                         for room in room_list.rooms {
-                            println!("-{}",room);
+                         //   println!("-{}",room);
                         };
                     },
                     IrcKind::IRC_KIND_USER_LISTING => {
-                        println!("Got user listing packet.");
+                        //println!("Got user listing packet.");
                         let user_list = UserListingPacket::from_bytes(&buffer[..])?;
                         for user in user_list.users{
-                            println!("-{}", user);
+                            //println!("-{}", user);
                         };
                     },
                     IrcKind::IRC_KIND_QUERY_USER => {
-                        println!("Got query user packet.");
+                        //println!("Got query user packet.");
                         let query_result = QueryUserPacket::from_bytes(&buffer[..])?;
-                        println!("{} is {}", &query_result.user_name, &query_result.status);
+                        //println!("{} is {}", &query_result.user_name, &query_result.status);
                     },
-                    IrcKind::IRC_KIND_SEND_MESSAGE => {println!("Got send message packet...?");},
-                    IrcKind::IRC_KIND_BROADCAST_MESSAGE => {println!("Got broadcast message packet...?");},
+                    IrcKind::IRC_KIND_SEND_MESSAGE => {/*println!("Got send message packet...?");*/},
+                    IrcKind::IRC_KIND_BROADCAST_MESSAGE => {/*println!("Got broadcast message packet...?");*/},
                     IrcKind::IRC_KIND_POST_MESSAGE => {
                         let new_message = PostMessagePacket::from_bytes(&buffer[..])?;
-                        println!("{}: {}", &new_message.sender, &new_message.message);
-
+                        //println!("{}: {}", &new_message.sender, &new_message.message);
                     },
 
                     IrcKind::IRC_KIND_DIRECT_MESSAGE => {
                         let new_direct = DirectMessagePacket::from_bytes(&buffer[..])?;
-                        println!("DM from {}: {}", &new_direct.target, &new_direct.message);
+                        //println!("DM from {}: {}", &new_direct.target, &new_direct.message);
                     },
-                    IrcKind::IRC_KIND_OFFER_FILE => {println!("Got offer file packet.");},
-                    IrcKind::IRC_KIND_ACCEPT_FILE => {println!("Got accept file packet.");},
-                    IrcKind::IRC_KIND_REJECT_FILE => {println!("Got reject file packet.");},
-                    IrcKind::IRC_KIND_FILE_TRANSFER => {println!("Got file transfer packet.");},
-                    IrcKind::IRC_KIND_CLIENT_DEPARTS => {println!("Got client departs packet...?");},
+                    IrcKind::IRC_KIND_OFFER_FILE => {
+                        //println!("Got offer file packet.");
+                    },
+                    IrcKind::IRC_KIND_ACCEPT_FILE => {
+                       // println!("Got accept file packet.");
+                    },
+                    IrcKind::IRC_KIND_REJECT_FILE => {
+                       // println!("Got reject file packet.");
+                    },
+                    IrcKind::IRC_KIND_FILE_TRANSFER => {
+                      //  println!("Got file transfer packet.");
+                    },
+                    IrcKind::IRC_KIND_CLIENT_DEPARTS => {
+                      //  println!("Got client departs packet...?");
+                    },
                     IrcKind::IRC_KIND_SERVER_DEPARTS => {
-                        println!("Got server departs packet.");
+                     //   println!("Got server departs packet.");
                         let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
-                        println!("Goodbye: {}", server_leaving.get_message());
+                      //  println!("Goodbye: {}", server_leaving.get_message());
+                        ret_string = format!("Server shutting down with this message: \"{}\"", server_leaving.get_message());
+                        break;
                     },
                     _ => {
                             println!("Error: Unknown packet recieved:\n{:?}",&buffer[0..bytes_read]);
-                            let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN).expect("Error packets should be infallible on creation");
+                            let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)
+                                .expect("Error packets should be infallible on creation");
                             tx_packet_out.send(error_notice.into()).await?;
                             break;
-
                     },
-
                 }
             }
         }else {
             if bytes_peeked == 0{
-            println!("Read connection to server has closed.");
-            break;}
+                //println!("Read connection to server has closed.");
+                ret_string = "Read connection to server has closed.".into();
+                break;
+            }
         }
     }
-    Ok(())
-
+    Ok(ret_string.into())
 }
+
+#[path = "curs.rs"]
+mod uilib; //Names the block of tests we import. The *name* of this library is set in Cargo.toml

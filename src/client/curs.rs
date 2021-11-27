@@ -5,33 +5,8 @@ use cursive::views::*;
 //use cursive::traits::*;
 use cursive::Cursive;
 
-fn main() {
-	let mut siv = cursive::default();
 
-    //Global callback to exit the program, will need to change this to pass a message to our core
-    //program code to do a graceful disconnect.
-	siv.add_global_callback(cursive::event::Event::CtrlChar('q'), |s| s.quit());
-
-    let mut panel = TabPanel::new();
-    panel.add_tab(make_room("First".into(),"First room".into()));
-    panel.add_tab(make_room("Second".into(),"Wait one".into()));
-    panel.add_tab(make_room("DM: Your_MOM".into(),"Hello deary".into()));
-    panel.add_tab(make_room("R/Politics".into(),"Butts butts butts butts\nbutts butts\n\tbutts yeah?".into()));
-    panel.add_tab(make_room("Third".into(),"That's just, like, your opinion man.".into()));
-
-    let panelv = panel.with_name("TABS__________________________32+").full_screen();
-
-    siv.add_fullscreen_layer(panelv);
-    
-    //Callbacks to capture ctrl-right and ctrl-left and switch tabs accordingly.
-	siv.add_global_callback(cursive::event::Event::Ctrl(cursive::event::Key::Left),switch_prev);
-        
-	siv.add_global_callback(cursive::event::Event::Ctrl(cursive::event::Key::Right),switch_next);
-
-	siv.run();
-}
-
-fn make_room(name: String, initial_text: String) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
+pub fn make_room(name: String, initial_text: String) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
     //We do want to be able to address the subregions of a tab later, however the field used for
     //the title of a tab in the cursive-tabs library is also the field used by the cursive library
     //for addressing views by name. As we want to set a tab's title to the name of a room, this
@@ -49,7 +24,7 @@ fn make_room(name: String, initial_text: String) -> NamedView<ResizedView<cursiv
     tab_contents
 }
 
-fn accept_input(s: &mut Cursive, text: &str){
+pub fn accept_input(s: &mut Cursive, text: &str){
 
     let current_tab = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
         let current_tab = tab_controller.active_tab();
@@ -73,7 +48,7 @@ fn accept_input(s: &mut Cursive, text: &str){
 
 }
 
-fn switch_next(s: &mut Cursive){
+pub fn switch_next(s: &mut Cursive){
     s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
             tab_controller.next();
     });
@@ -96,7 +71,7 @@ fn switch_next(s: &mut Cursive){
     };
 }
 
-fn switch_prev(s: &mut Cursive){
+pub fn switch_prev(s: &mut Cursive){
     s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
             tab_controller.prev();
     });
