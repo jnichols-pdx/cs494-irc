@@ -1217,6 +1217,44 @@ fn post_message_packet_from_bytes() {
     let pmp = pmp_good.unwrap();
     assert_eq!(pmp.get_message(), "Dude, where'd you go?".to_string());
 
+
+
+    let mut bytes_four = BytesMut::with_capacity(155);
+    bytes_four.put_u8(IrcKind::IRC_KIND_POST_MESSAGE as u8);
+    bytes_four.put_u32(133);
+
+    bytes_four.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_four.put_bytes(b'\0', remain);
+    bytes_four.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_four.put_bytes(b'\0', remain);
+    bytes_four.put_slice("Dude\0".as_bytes());
+
+    let pmp_four = PostMessagePacket::from_bytes(&bytes_four);
+    assert!(pmp_four.is_ok());
+    let pmp = pmp_four.unwrap();
+    assert_eq!(pmp.get_message(), "Dude".to_string());
+
+
+
+
+    let mut bytes_empty = BytesMut::with_capacity(155);
+    bytes_empty.put_u8(IrcKind::IRC_KIND_POST_MESSAGE as u8);
+    bytes_empty.put_u32(129);
+
+    bytes_empty.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_empty.put_bytes(b'\0', remain);
+    bytes_empty.put_slice("Bob".as_bytes());
+    let remain = 64 - "Bob".len();
+    bytes_empty.put_bytes(b'\0', remain);
+    bytes_empty.put_slice("\0".as_bytes());
+
+    let pmp_empty = PostMessagePacket::from_bytes(&bytes_empty);
+    assert!(pmp_empty.is_err());
+
+
     let mut bytes_short = BytesMut::with_capacity(145);
     bytes_short.put_u8(IrcKind::IRC_KIND_POST_MESSAGE as u8);
     bytes_short.put_u32(140);

@@ -1673,7 +1673,7 @@ impl IrcPacket for PostMessagePacket {
 
         let length: usize = u32_from_slice(&source[1..5]) as usize;
 
-        if length < 134 {
+        if length < 129 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
