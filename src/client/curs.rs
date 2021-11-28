@@ -30,7 +30,11 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender
             let txi = tx_packet_out.clone();
             let _ =  accept_input(s,text,txi, false);
         }).with_name(format!("{}---------------------------input", name)).full_width();
-    let sideways = LinearLayout::horizontal().child(Panel::new(body)).child(Panel::new(listing));
+    //TODO: we would prefer to put the userlist on the right, but this libraries interaction
+    //between fixed_width and full_screen elements isn't perfect, allows the chat area to push the
+    //user list off the screen. Put userlist to left of chat area for now.
+    //let sideways = LinearLayout::horizontal().child(Panel::new(body)).child(Panel::new(listing).fixed_width(22));
+    let sideways = LinearLayout::horizontal().child(Panel::new(listing)).child(Panel::new(body));
 
     //The outermost layout view that will be directly contained by a tabview gets the raw room
     //name, permitting that user chosen name to show up in the tabview's user interface.
