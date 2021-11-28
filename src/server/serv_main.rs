@@ -141,7 +141,7 @@ async fn new_connections<'a>(listener: TcpListener, master_rooms: Arc<RwLock<Has
 
 
 
-async fn client_lifecycle(mut socket: TcpStream, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, mut our_handle: ClientHandle, mut channel_source: mpsc::Receiver<SyncSendPack>){
+async fn client_lifecycle<'a>(mut socket: TcpStream, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, mut our_handle: ClientHandle, mut channel_source: mpsc::Receiver<SyncSendPack>) -> Result<'a, ()>{
     //Split the TcpStream into reader and writer, pass each to their own asynchronous task
     let (tcp_in, tcp_out) = socket.into_split();
     let client_name = our_handle.name;
@@ -179,8 +179,23 @@ async fn client_lifecycle(mut socket: TcpStream, master_rooms: Arc<RwLock<HashMa
         let mut master_users_rw = master_users.write().unwrap();
         master_users_rw.remove(&client_name);
     }
-    
 
+    //Don't have access to the cached_rooms tha the Responder uses to track which rooms this user
+    //is in. Getting access would require wrapping it in an Arc<Mutex<>> for thread safety, and
+    //we already have enough of that going on.
+    //Instead send a notice to ALL room tasks that this user should be removed.
+    let mut rooms_to_notify : Vec<mpsc::Sender<String>> = Vec::new();
+    {
+        let master_rooms_ro = master_rooms.read().unwrap();
+        for (_,handle) in master_rooms_ro.iter(){
+            rooms_to_notify.push(handle.leave_channel_sink.clone());
+        }
+    }
+
+    for sink in rooms_to_notify {
+        sink.send(client_name.clone()).await?;
+    }
+    Ok(())
 }
 
 async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()>
@@ -359,7 +374,6 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
     let ret_string : String = "".to_string();
     while let Some(packet) = packet_source.recv().await {
         match packet.contained_kind {
-            IrcKind::IRC_KIND_NEW_CLIENT => {},
             IrcKind::IRC_KIND_ENTER_ROOM => {
                 let erp = packet.erp.unwrap();
                 let old_room_handle : Option::<RoomHandle>;
@@ -424,13 +438,22 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
             },
             IrcKind::IRC_KIND_QUERY_USER => {
                 let qup = packet.qup.unwrap();
-                let user_name = qup.user_name.to_owned();
-                let status = qup.status.to_owned();
+
+                //TODO: lokup and respond.
             },
             IrcKind::IRC_KIND_SEND_MESSAGE => {
+                let smp = packet.smp.unwrap();
+                let room = smp.room.clone();
+                let message = smp.get_message();
+                match cached_rooms.get(&room) {
+                    Some(rh) => { 
+                        let post_message = PostMessagePacket::new(&room, &client_name, &message)?;
+                        rh.post_channel_sink.send(post_message.into()).await?;
+                    },
+                    None => {},
+               };
             },
             IrcKind::IRC_KIND_BROADCAST_MESSAGE => {},
-            IrcKind::IRC_KIND_POST_MESSAGE => { },
             IrcKind::IRC_KIND_DIRECT_MESSAGE => { },
             IrcKind::IRC_KIND_OFFER_FILE => {},
             IrcKind::IRC_KIND_ACCEPT_FILE => {},
@@ -517,7 +540,7 @@ async fn room_lifecycle<'a>(room_name: String, mut join_source: mpsc::Receiver<C
 
     println!("Closing room: {}",&room_name);
 
-    //Remove this room to the master list and inform all users
+    //Remove this room from the master list and inform all users
     let mut outgoing = RoomListingPacket::new()?;
     {
         let mut master_rooms_rw;
@@ -629,7 +652,28 @@ async fn users_leaving_room<'a>(room_name: String, mut leave_source: mpsc::Recei
 
 
 async fn messages_posting_to_room<'a>(room_name: String, mut post_source: mpsc::Receiver<SyncSendPack>, users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>>) -> Result<'a, ()>{
-    while let Some(message_to_post) = post_source.recv().await {
+    while let Some(message_packed) = post_source.recv().await {
+
+        if message_packed.contained_kind == IrcKind::IRC_KIND_POST_MESSAGE {
+
+            let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
+            let mut outgoing = message_packed.pmp.unwrap();
+
+            {
+                let users_in_room_ro;
+                match users_in_room.read() {
+                    Ok(ro) => users_in_room_ro = ro,
+                    Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                }
+                for (_,handle) in users_in_room_ro.iter() {
+                    clients_to_notify.push(handle.send_channel_sink.clone());
+                }
+            }
+
+            for client in &clients_to_notify {
+                client.send(outgoing.clone().into()).await?;
+            }
+        }
     }
     Ok(())
 }

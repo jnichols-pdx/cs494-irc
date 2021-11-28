@@ -55,7 +55,7 @@ pub fn make_dm_room(name: String, initial_text: String, tx_packet_out: mpsc::Sen
 
 pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>, is_dm: bool) -> Result<'a, ()>{
   
-    //where are we?
+    //Which tab are we in.
     let current_tab = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
         let current_tab = tab_controller.active_tab();
         match current_tab {
@@ -120,6 +120,9 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                             content.append("OFFERCOMMAND");
                         });
                     },
+                    Some("/yell") | Some("/broadcast") => {
+                        //TODO: broadcast messages.
+                    },
                     Some(_) | None => (),
                 };
             } else {
@@ -135,11 +138,6 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                 } else {
                     let outgoing = SendMessagePacket::new(&tab_name.to_string(), &text.to_string())?;
                     tx_packet_out.blocking_send(outgoing.into())?;
-
-                //DEBUG: local echo:
-                s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
-                    content.append(format!("{}\n", text));
-                });
                 }
 
             }
