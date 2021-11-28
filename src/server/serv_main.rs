@@ -362,26 +362,20 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
             IrcKind::IRC_KIND_NEW_CLIENT => {},
             IrcKind::IRC_KIND_ENTER_ROOM => {
                 let erp = packet.erp.unwrap();
-                let mut built_new_room = false;
-                let our_room_handle;
+                let old_room_handle : Option::<RoomHandle>;
                 {
                     let master_rooms_ro;
                     match master_rooms.read() {
                         Ok(ro) => master_rooms_ro = ro,
                         Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
                     }
-                    match master_rooms_ro.get(&erp.room_name) {
+                    old_room_handle = match master_rooms_ro.get(&erp.room_name) {
                         Some(rh) => { //room exists, cache it for later
                             cached_rooms.insert(erp.room_name.clone(), rh.clone());
-                            our_room_handle = rh.clone();
+                            Some(rh.clone())
                         },
-                        None => {//make room then join it
-                            //pass access to the master lists so a room can remove itself
-                            //from the list and notify all users of the change when the 
-                            //last user leaves the room
-                            our_room_handle = make_room(erp.room_name.clone(), master_users.clone(), master_rooms.clone());
-                            cached_rooms.insert(erp.room_name.clone(), our_room_handle.clone());
-                            built_new_room = true;
+                        None => {// need to make the room before we may join it
+                            None
                         },
                     };
                 }
@@ -391,41 +385,16 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                     send_channel_sink: channel_sink.clone(),
                 };
 
-                if built_new_room { //Update master room list and notify all users of the new room
-                    println!("in added room");
-                    let mut outgoing = RoomListingPacket::new()?;
-                    {
-                        let mut master_rooms_rw;
-                        match master_rooms.write() {
-                            Ok(rw) => master_rooms_rw = rw,
-                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
-                        }
-                        master_rooms_rw.insert(erp.room_name.clone(),our_room_handle.clone());
-                        for (key,_) in master_rooms_rw.iter() {
-                            println!("Pushing room key {}", key);
-                            outgoing.push(key)?;
-                        }
+                match old_room_handle {
+                    Some(orh) => {
+                        orh.join_channel_sink.send(handle_to_this_client).await?;
                     }
-
-                    let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
-
-                    {
-                        let master_users_ro;
-                        match master_users.read() {
-                            Ok(ro) => master_users_ro = ro,
-                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
-                        }
-                        for (_,client) in master_users_ro.iter() {
-                            clients_to_notify.push(client.send_channel_sink.clone());
-                        }
+                    None => {
+                        let new_room_handle = make_room(erp.room_name.clone(), master_users.clone(), master_rooms.clone()).await?;
+                        cached_rooms.insert(erp.room_name.clone(), new_room_handle.clone());
+                        new_room_handle.join_channel_sink.send(handle_to_this_client).await?;
                     }
-
-                    for client in &clients_to_notify {
-                        client.send(outgoing.clone().into()).await?;
-                    }
-                }
-
-                our_room_handle.join_channel_sink.send(handle_to_this_client).await?;
+                };
                 //Room will send its user list to the client after we join, indicating join success
                 //to the client.
             },
@@ -473,23 +442,60 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
     Ok(ret_string.into())
 }
 
-pub fn make_room(room_name: String, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>) -> RoomHandle {
+async fn make_room<'a>(room_name: String, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>) -> Result<'a, RoomHandle> {
     let (join_channel_sink, mut join_channel_source) = mpsc::channel::<ClientHandle>(32);
     let (post_channel_sink, mut post_channel_source) = mpsc::channel::<SyncSendPack>(64);
     let (leave_channel_sink, mut leave_channel_source) = mpsc::channel::<String>(32);
+    let rn1 = room_name.clone();
     let p1 = post_channel_sink.clone();
+    let u1 = master_users.clone();
+    let r1 = master_rooms.clone();
 
-    tokio::spawn(room_lifecycle(room_name, join_channel_source, p1, post_channel_source, leave_channel_source, master_users, master_rooms));
+    tokio::spawn(room_lifecycle(rn1, join_channel_source, p1, post_channel_source, leave_channel_source, u1, r1));
 
     let new_room_handle = RoomHandle {
         join_channel_sink: join_channel_sink,
         post_channel_sink: post_channel_sink,
         leave_channel_sink: leave_channel_sink,
     };
-    new_room_handle
+
+    //Add this room to the master list and inform all users
+    let mut outgoing = RoomListingPacket::new()?;
+    {
+        let mut master_rooms_rw;
+        match master_rooms.write() {
+            Ok(rw) => master_rooms_rw = rw,
+            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+        }
+        master_rooms_rw.insert(room_name,new_room_handle.clone());
+        for (key,_) in master_rooms_rw.iter() {
+            println!("New room opened: {}", key);
+            outgoing.push(key)?;
+        }
+    }
+
+    let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
+
+    {
+        let master_users_ro;
+        match master_users.read() {
+            Ok(ro) => master_users_ro = ro,
+            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+        }
+        for (_,client) in master_users_ro.iter() {
+            clients_to_notify.push(client.send_channel_sink.clone());
+        }
+    }
+
+    for client in &clients_to_notify {
+        client.send(outgoing.clone().into()).await?;
+    }
+
+
+    Ok(new_room_handle)
 }
 
-async fn room_lifecycle(room_name: String, mut join_source: mpsc::Receiver<ClientHandle>, mut post_sink: mpsc::Sender<SyncSendPack>, mut post_source: mpsc::Receiver<SyncSendPack>, mut leave_source: mpsc::Receiver<String>, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>){
+async fn room_lifecycle<'a>(room_name: String, mut join_source: mpsc::Receiver<ClientHandle>, mut post_sink: mpsc::Sender<SyncSendPack>, mut post_source: mpsc::Receiver<SyncSendPack>, mut leave_source: mpsc::Receiver<String>, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>) -> Result<'a,()>{
 
     let users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>> = Arc::new(RwLock::new(HashMap::new()));
     let u1 = users_in_room.clone();
@@ -509,11 +515,40 @@ async fn room_lifecycle(room_name: String, mut join_source: mpsc::Receiver<Clien
         _ = messages_posting_to_room(rn3, post_source, u3) => {},
     }
 
-    println!("Room, ah, ah - disappears!");
+    println!("Closing room: {}",&room_name);
+
+    //Remove this room to the master list and inform all users
+    let mut outgoing = RoomListingPacket::new()?;
     {
-        //remove self from rooms list
-        //tell all users about it
+        let mut master_rooms_rw;
+        match master_rooms.write() {
+            Ok(rw) => master_rooms_rw = rw,
+            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+        }
+        master_rooms_rw.remove(&room_name);
+        for (key,_) in master_rooms_rw.iter() {
+            println!("Pushing room key {}", key);
+            outgoing.push(key)?;
+        }
     }
+
+    let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
+
+    {
+        let master_users_ro;
+        match master_users.read() {
+            Ok(ro) => master_users_ro = ro,
+            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+        }
+        for (_,client) in master_users_ro.iter() {
+            clients_to_notify.push(client.send_channel_sink.clone());
+        }
+    }
+
+    for client in &clients_to_notify {
+        client.send(outgoing.clone().into()).await?;
+    }
+    Ok(())
 }
 
 async fn users_entering_room<'a>(room_name: String, mut join_source: mpsc::Receiver<ClientHandle>, users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>>, mut post_sink: mpsc::Sender<SyncSendPack>) -> Result<'a, String>{
