@@ -902,7 +902,7 @@ impl From<ServerDepartsPacket> for SyncSendPack {
 //  Error Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ErrorPacket {
     pub error_code: IrcErrCode,
 }
@@ -951,7 +951,7 @@ impl IrcPacket for ErrorPacket {
 // NewClient Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NewClientPacket {
     pub chat_name: String,
 }
@@ -1004,7 +1004,7 @@ impl IrcPacket for NewClientPacket {
 // Heartbeat Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HeartbeatPacket {}
 
 impl HeartbeatPacket {
@@ -1044,7 +1044,7 @@ impl IrcPacket for HeartbeatPacket {
 // Enter Room Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EnterRoomPacket {
     pub room_name: String,
 }
@@ -1097,7 +1097,7 @@ impl IrcPacket for EnterRoomPacket {
 // Leave Room Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LeaveRoomPacket {
     pub room_name: String,
 }
@@ -1150,7 +1150,7 @@ impl IrcPacket for LeaveRoomPacket {
 // List Rooms Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ListRoomsPacket {}
 
 impl ListRoomsPacket {
@@ -1190,7 +1190,7 @@ impl IrcPacket for ListRoomsPacket {
 // Room Listing Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RoomListingPacket {
     pub rooms: Vec<String>,
 }
@@ -1277,7 +1277,7 @@ impl IrcPacket for RoomListingPacket {
 // User Listing Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct UserListingPacket {
     pub room: String,
     pub users: Vec<String>,
@@ -1403,7 +1403,7 @@ impl fmt::Display for UserStatus {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct QueryUserPacket {
     pub user_name: String,
     pub status: UserStatus,
@@ -1473,7 +1473,7 @@ impl IrcPacket for QueryUserPacket {
 // Send Message Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SendMessagePacket {
     pub room: String,
     pub message: String,
@@ -1547,7 +1547,7 @@ impl IrcPacket for SendMessagePacket {
 // Broadcast Message Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BroadcastMessagePacket {
     pub message: String,
 }
@@ -1612,7 +1612,7 @@ impl IrcPacket for BroadcastMessagePacket {
 // Post Message Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct PostMessagePacket {
     pub room: String,
     pub sender: String,
@@ -1699,7 +1699,7 @@ impl IrcPacket for PostMessagePacket {
 // Direct Message Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DirectMessagePacket {
     pub target: String,
     pub message: String,
@@ -1773,7 +1773,7 @@ impl IrcPacket for DirectMessagePacket {
 // FILE TRANSFER HANDSHAKE PACKETS
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TransferCore {
     pub recipient: String,
     pub sender: String,
@@ -1782,17 +1782,17 @@ pub struct TransferCore {
     pub file_name: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct OfferFilePacket {
     core: TransferCore,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AcceptFilePacket {
     core: TransferCore,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RejectFilePacket {
     core: TransferCore,
 }
@@ -2019,7 +2019,7 @@ impl RejectFilePacket {
 // File Transfer Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FileTransferPacket {
     pub transfer_id: u16,
     pub finished: bool,
@@ -2091,7 +2091,7 @@ impl IrcPacket for FileTransferPacket {
 // Client Departs Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ClientDepartsPacket {
     pub message: String,
 }
@@ -2156,7 +2156,7 @@ impl IrcPacket for ClientDepartsPacket {
 // Server Departs Packet
 ///////////////////////////////////////////////
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ServerDepartsPacket {
     pub message: String,
 }

@@ -18,49 +18,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc,RwLock};
 use ctrlc;
 
-/*
-#[derive(Clone, Debug)]
-pub struct ClientHandle {
-    pub name: String,
-    pub send_channel_sink: mpsc::Sender<SyncSendPack>,
-}*/
-/*
-pub struct Client<'a,'b> {
-    pub name: String,
-    pub found_pulse: Arc<AtomicBool>,
-    //pub connection: TcpStream,
-    pub tcp_output: tokio::net::tcp::OwnedWriteHalf,
-    pub tcp_input: tokio::net::tcp::OwnedReadHalf,
-    pub send_channel_source: mpsc::Receiver<SyncSendPack>,
-    pub send_channel_sink: mpsc::Sender<SynSendPack>,
-    pub cached_rooms: HashMap<String, <RoomHandle>>,
-    pub cached_users: HashMap<String, <RoomHandle>>,
-
-    pub master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
-    pub master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
-}
-*/
-/*
-#[derive(Clone, Debug)]
-pub struct RoomHandle {
-    pub join_channel_sink: mpsc::Sender<ClientHandle>,
-    pub post_channel_sink: mpsc::Sender<SyncSendPack>,
-    pub leave_channel_sink: mpsc::Sender<String>,
-}*/
-/*
-pub struct Room<'a,'b> {
-    pub name: String,
-    pub post_channel_source: mpsc::Receiver<SyncSendPack>,
-    pub post_channel_sink: mpsc::Sender<SyncSendPack>,
-    pub join_channel_source: mpsc::Receiver<ClientShort>,
-    pub join_channel_sink: mpsc::Sender<ClientHandle>,
-    pub leave_channel_source: mpsc::Receiver<String>,
-    pub leave_channel_sink: mpsc::Sender<String>,
-    pub user_handles: Arc<RwLock<HashMap<String, mpsc::Sender<SyncSendPack>>>>,
-}
-*/
-
-
 #[tokio::main]
 async fn main() -> Result<'static, ()> {
     println!("Hello, world! [server]");
@@ -405,6 +362,7 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
             IrcKind::IRC_KIND_NEW_CLIENT => {},
             IrcKind::IRC_KIND_ENTER_ROOM => {
                 let erp = packet.erp.unwrap();
+                let mut built_new_room = false;
                 let our_room_handle;
                 {
                     let master_rooms_ro;
@@ -414,11 +372,16 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                     }
                     match master_rooms_ro.get(&erp.room_name) {
                         Some(rh) => { //room exists, cache it for later
-                            cached_rooms.insert(erp.room_name, rh.clone());
+                            cached_rooms.insert(erp.room_name.clone(), rh.clone());
                             our_room_handle = rh.clone();
                         },
                         None => {//make room then join it
-                            our_room_handle = make_room();
+                            //pass access to the master lists so a room can remove itself
+                            //from the list and notify all users of the change when the 
+                            //last user leaves the room
+                            our_room_handle = make_room(erp.room_name.clone(), master_users.clone(), master_rooms.clone());
+                            cached_rooms.insert(erp.room_name.clone(), our_room_handle.clone());
+                            built_new_room = true;
                         },
                     };
                 }
@@ -428,11 +391,54 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                     send_channel_sink: channel_sink.clone(),
                 };
 
+                if built_new_room { //Update master room list and notify all users of the new room
+                    println!("in added room");
+                    let mut outgoing = RoomListingPacket::new()?;
+                    {
+                        let mut master_rooms_rw;
+                        match master_rooms.write() {
+                            Ok(rw) => master_rooms_rw = rw,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                        }
+                        master_rooms_rw.insert(erp.room_name.clone(),our_room_handle.clone());
+                        for (key,_) in master_rooms_rw.iter() {
+                            println!("Pushing room key {}", key);
+                            outgoing.push(key)?;
+                        }
+                    }
+
+                    let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
+
+                    {
+                        let master_users_ro;
+                        match master_users.read() {
+                            Ok(ro) => master_users_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                        }
+                        for (_,client) in master_users_ro.iter() {
+                            clients_to_notify.push(client.send_channel_sink.clone());
+                        }
+                    }
+
+                    for client in &clients_to_notify {
+                        client.send(outgoing.clone().into()).await?;
+                    }
+                }
+
                 our_room_handle.join_channel_sink.send(handle_to_this_client).await?;
                 //Room will send its user list to the client after we join, indicating join success
                 //to the client.
             },
-            IrcKind::IRC_KIND_LEAVE_ROOM => {},
+            IrcKind::IRC_KIND_LEAVE_ROOM => {
+                let lrp = packet.lrp.unwrap();
+                match cached_rooms.get(&lrp.room_name) {
+                    Some(rh) => { 
+                        rh.leave_channel_sink.send(client_name.clone()).await?;
+                    },
+                    None => {},
+               };
+
+            },
             IrcKind::IRC_KIND_LIST_ROOMS => {
                 let mut outgoing = RoomListingPacket::new()?;
                 {
@@ -452,7 +458,8 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                 let user_name = qup.user_name.to_owned();
                 let status = qup.status.to_owned();
             },
-            IrcKind::IRC_KIND_SEND_MESSAGE => {},
+            IrcKind::IRC_KIND_SEND_MESSAGE => {
+            },
             IrcKind::IRC_KIND_BROADCAST_MESSAGE => {},
             IrcKind::IRC_KIND_POST_MESSAGE => { },
             IrcKind::IRC_KIND_DIRECT_MESSAGE => { },
@@ -466,12 +473,13 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
     Ok(ret_string.into())
 }
 
-pub fn make_room( ) -> RoomHandle {
+pub fn make_room(room_name: String, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>) -> RoomHandle {
     let (join_channel_sink, mut join_channel_source) = mpsc::channel::<ClientHandle>(32);
     let (post_channel_sink, mut post_channel_source) = mpsc::channel::<SyncSendPack>(64);
     let (leave_channel_sink, mut leave_channel_source) = mpsc::channel::<String>(32);
+    let p1 = post_channel_sink.clone();
 
-    tokio::spawn(room_lifecycle(join_channel_source, post_channel_source, leave_channel_source));
+    tokio::spawn(room_lifecycle(room_name, join_channel_source, p1, post_channel_source, leave_channel_source, master_users, master_rooms));
 
     let new_room_handle = RoomHandle {
         join_channel_sink: join_channel_sink,
@@ -481,44 +489,112 @@ pub fn make_room( ) -> RoomHandle {
     new_room_handle
 }
 
-async fn room_lifecycle(mut join_source: mpsc::Receiver<ClientHandle>,mut post_source: mpsc::Receiver<SyncSendPack>,mut leave_source: mpsc::Receiver<String>){
- /*   //Split the TcpStream into reader and writer, pass each to their own asynchronous task
-    let (tcp_in, tcp_out) = socket.into_split();
-    let client_name = our_handle.name;
-    let channel_sink = our_handle.send_channel_sink;
-    let sink1 = channel_sink.clone();
-    let sink2 = channel_sink.clone();
-    let sink3 = channel_sink.clone();
-    let found_pulse = Arc::new(AtomicBool::new(true));
-    let fp = found_pulse.clone();
-    let (responder_sink, mut responder_source) = mpsc::channel::<SyncSendPack>(32);
-    let mrc = master_rooms.clone();
-    let muc = master_users.clone();
+async fn room_lifecycle(room_name: String, mut join_source: mpsc::Receiver<ClientHandle>, mut post_sink: mpsc::Sender<SyncSendPack>, mut post_source: mpsc::Receiver<SyncSendPack>, mut leave_source: mpsc::Receiver<String>, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>, master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>){
 
-    let offline_message: String;
+    let users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>> = Arc::new(RwLock::new(HashMap::new()));
+    let u1 = users_in_room.clone();
+    let u2 = users_in_room.clone();
+    let u3 = users_in_room.clone();
+
+    let p1 = post_sink.clone();
+    let p2 = post_sink.clone();
+
+    let rn1 = room_name.clone();
+    let rn2 = room_name.clone();
+    let rn3 = room_name.clone();
+
     tokio::select!{
-        out = reader(tcp_in, responder_sink, fp, sink1) => {
-            match out {
-                Ok(msg) => offline_message = msg,
-                Err(e) => offline_message = format!("{}",e,),
-            };
-        },
-        out = responder(client_name.clone(), responder_source, sink3, mrc, muc) => {
-            match out {
-                Ok(msg) => offline_message = msg,
-                Err(e) => offline_message = format!("{}",e,),
-            };
-        },
-        _ = writer(tcp_out, channel_source) => {offline_message = "Downstream connection ended.".into();},
-        _ = pulse(sink2) => {offline_message = "Internal Error (server keepalive failed).".into();},
-        _ = pulse_monitor(found_pulse) => {offline_message = "No heartbeat responded in 30 seconds.".into();},
+        _ = users_entering_room(rn1, join_source, u1, p1) => {},
+        _ = users_leaving_room(rn2, leave_source, u2, p2) => {},
+        _ = messages_posting_to_room(rn3, post_source, u3) => {},
     }
 
-    println!("Client '{}' ejected: {}",&client_name, &offline_message);
+    println!("Room, ah, ah - disappears!");
     {
-        let mut master_users_rw = master_users.write().unwrap();
-        master_users_rw.remove(&client_name);
+        //remove self from rooms list
+        //tell all users about it
     }
-    
-*/
+}
+
+async fn users_entering_room<'a>(room_name: String, mut join_source: mpsc::Receiver<ClientHandle>, users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>>, mut post_sink: mpsc::Sender<SyncSendPack>) -> Result<'a, String>{
+    while let Some(entering_user) = join_source.recv().await {
+        println!("{} enters {}", entering_user.name, room_name);
+        let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
+        let mut outgoing = UserListingPacket::new()?;
+        outgoing.set_room(&room_name)?;
+        let mut user_is_new = false;
+
+        {
+            let mut users_in_room_rw;
+            match users_in_room.write() {
+                Ok(rw) => users_in_room_rw = rw,
+                Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+            }
+            if ! users_in_room_rw.contains_key(&entering_user.name) {
+                user_is_new = true;
+                users_in_room_rw.insert(entering_user.name.clone(), entering_user.clone());
+                for (key,handle) in users_in_room_rw.iter() {
+                    outgoing.push(key)?;
+                    clients_to_notify.push(handle.send_channel_sink.clone());
+                }
+            }
+        }
+
+        if user_is_new {
+            for client in &clients_to_notify {
+                client.send(outgoing.clone().into()).await?;
+            }
+        }
+
+    }
+    Ok("no more users may enter".to_string())
+}
+
+async fn users_leaving_room<'a>(room_name: String, mut leave_source: mpsc::Receiver<String>, users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>>, mut post_sink: mpsc::Sender<SyncSendPack>) -> Result<'a, String>{
+    while let Some(leaving_user) = leave_source.recv().await {
+        println!("{} leaves {}", leaving_user, room_name);
+
+        let mut clients_to_notify : Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
+        let mut outgoing = UserListingPacket::new()?;
+        outgoing.set_room(&room_name)?;
+        let mut user_removed = false;
+        let mut have_users = true;
+
+        {
+            let mut users_in_room_rw;
+            match users_in_room.write() {
+                Ok(rw) => users_in_room_rw = rw,
+                Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+            }
+
+            if  users_in_room_rw.contains_key(&leaving_user) {
+                users_in_room_rw.remove(&leaving_user);
+                user_removed = true;
+                for (key,handle) in users_in_room_rw.iter() {
+                    outgoing.push(key)?;
+                    clients_to_notify.push(handle.send_channel_sink.clone());
+                }
+                have_users = users_in_room_rw.len() > 0;
+            }
+        }
+
+        if user_removed {
+            for client in &clients_to_notify {
+                client.send(outgoing.clone().into()).await?;
+            }
+        }
+
+        if ! have_users{
+            break;
+        }
+
+    }
+    Ok("I'm not trapped in here with you... you're trapped in here with me!".to_string())
+}
+
+
+async fn messages_posting_to_room<'a>(room_name: String, mut post_source: mpsc::Receiver<SyncSendPack>, users_in_room : Arc<RwLock<HashMap<String, ClientHandle>>>) -> Result<'a, ()>{
+    while let Some(message_to_post) = post_source.recv().await {
+    }
+    Ok(())
 }
