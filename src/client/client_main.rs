@@ -47,15 +47,12 @@ async fn main() -> Result<'static, ()>{
 
     let mut arg_list = env::args().skip(1);
     let my_name = arg_list.next().unwrap();
-    //println!("Hello, world! [client]:{:?}",my_name);
 
     let host;
     if arg_list.len() > 0 {
         host = arg_list.next().unwrap();
-        //println!("Connecting to host {}", host);
     } else {
         host = "192.168.2.5:17734".to_string();
-        //println!("Connecting to default host {}", host);
     }
 
     let mut con = TcpStream::connect(host).await?;
@@ -366,7 +363,6 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
     loop {
         bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
-            let kindbyte = peeker[0];
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
             let mut buffer = vec![0; msg_len + 5];
             let bytes_read = con.read(&mut buffer).await?;
@@ -434,7 +430,7 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_CLIENT_DEPARTS => { println!("Got client departs packet...?"); },
                     IrcKind::IRC_KIND_SERVER_DEPARTS => {
                         let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
-                        ret_string = format!("Server shutting down with this message: \"{}\"", server_leaving.get_message());
+                        ret_string = format!("Server disconnected with this message: \"{}\"", server_leaving.get_message());
                         break;
                     },
                     _ => {
