@@ -1524,7 +1524,7 @@ impl IrcPacket for SendMessagePacket {
 
         let length: usize = u32_from_slice(&source[1..5]) as usize;
 
-        if length < 70 {
+        if length < 65 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 
@@ -1750,7 +1750,7 @@ impl IrcPacket for DirectMessagePacket {
 
         let length: usize = u32_from_slice(&source[1..5]) as usize;
 
-        if length < 70 {
+        if length < 65 {
             return Err(IrcError::FieldLengthIncorrect());
         }
 

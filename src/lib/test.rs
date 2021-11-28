@@ -997,6 +997,35 @@ fn send_message_packet_from_bytes() {
     let smp = smp_good.unwrap();
     assert_eq!(smp.get_message(), "Dude, where'd you go?".to_string());
 
+
+    let mut bytes_four = BytesMut::with_capacity(91);
+    bytes_four.put_u8(IrcKind::IRC_KIND_SEND_MESSAGE as u8);
+    bytes_four.put_u32(69);
+
+    bytes_four.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_four.put_bytes(b'\0', remain);
+    bytes_four.put_slice("1234\0".as_bytes());
+
+    let smp_four = SendMessagePacket::from_bytes(&bytes_four);
+    assert!(smp_four.is_ok());
+    let smp = smp_four.unwrap();
+    assert_eq!(smp.get_message(), "1234".to_string());
+
+
+    let mut bytes_empty = BytesMut::with_capacity(91);
+    bytes_empty.put_u8(IrcKind::IRC_KIND_SEND_MESSAGE as u8);
+    bytes_empty.put_u32(65);
+
+    bytes_empty.put_slice("Bob's_room".as_bytes());
+    let remain = 64 - "Bob's_room".len();
+    bytes_empty.put_bytes(b'\0', remain);
+    bytes_empty.put_slice("\0".as_bytes());
+
+    let smp_empty = SendMessagePacket::from_bytes(&bytes_empty);
+    assert!(smp_empty.is_err());
+
+
     let mut bytes_short = BytesMut::with_capacity(81);
     bytes_short.put_u8(IrcKind::IRC_KIND_SEND_MESSAGE as u8);
     bytes_short.put_u32(76);
@@ -1322,6 +1351,38 @@ fn direct_message_packet_from_bytes() {
     assert!(dmp_good.is_ok());
     let dmp = dmp_good.unwrap();
     assert_eq!(dmp.get_message(), "Dude, where'd you go?".to_string());
+
+
+
+    let mut bytes_four = BytesMut::with_capacity(91);
+    bytes_four.put_u8(IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
+    bytes_four.put_u32(69);
+
+    bytes_four.put_slice("Bob's_target".as_bytes());
+    let remain = 64 - "Bob's_target".len();
+    bytes_four.put_bytes(b'\0', remain);
+    bytes_four.put_slice("1234\0".as_bytes());
+
+    let dmp_four = DirectMessagePacket::from_bytes(&bytes_four);
+    assert!(dmp_four.is_ok());
+    let dmp = dmp_four.unwrap();
+    assert_eq!(dmp.get_message(), "1234".to_string());
+
+
+
+    let mut bytes_empty = BytesMut::with_capacity(91);
+    bytes_empty.put_u8(IrcKind::IRC_KIND_SEND_MESSAGE as u8);
+    bytes_empty.put_u32(65);
+
+    bytes_empty.put_slice("Bob's_target".as_bytes());
+    let remain = 64 - "Bob's_target".len();
+    bytes_empty.put_bytes(b'\0', remain);
+    bytes_empty.put_slice("\0".as_bytes());
+
+    let dmp_empty = SendMessagePacket::from_bytes(&bytes_empty);
+    assert!(dmp_empty.is_err());
+
+
 
     let mut bytes_short = BytesMut::with_capacity(81);
     bytes_short.put_u8(IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
