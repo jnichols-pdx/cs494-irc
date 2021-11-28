@@ -195,12 +195,6 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
 {
     while let Some(packet) = rx_from_main.recv().await {
         match packet.contained_kind {
-            IrcKind::IRC_KIND_ERR => {}, //Handled by Reader function
-            IrcKind::IRC_KIND_NEW_CLIENT => {}, //meaningless to a client
-            IrcKind::IRC_KIND_HEARTBEAT => {}, //handled by read function
-            IrcKind::IRC_KIND_ENTER_ROOM => {}, //meaningless to a client
-            IrcKind::IRC_KIND_LEAVE_ROOM => {},//meaningless to a client?
-            IrcKind::IRC_KIND_LIST_ROOMS => {}, //meaningless to a client
             IrcKind::IRC_KIND_ROOM_LISTING => {
                 let rlp = packet.rlp.unwrap();
                     cb.send(Box::new(move |s: &mut cursive::Cursive| {
@@ -232,7 +226,6 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
                     });
                 })).unwrap();
             },
-
             IrcKind::IRC_KIND_QUERY_USER => {
                 let qup = packet.qup.unwrap();
                 let user_name = qup.user_name.to_owned();
@@ -245,8 +238,6 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
                         );
                 })).unwrap();
             },
-            IrcKind::IRC_KIND_SEND_MESSAGE => {}, //meaningless to a client
-            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {}, //meaningless to a client
             IrcKind::IRC_KIND_POST_MESSAGE => {
                 let pmp = packet.pmp.unwrap();
                 let room_name = pmp.room.to_owned();
@@ -281,9 +272,7 @@ async fn responder(cb: cursive::CbSink,mut rx_from_main: mpsc::Receiver<SyncSend
             IrcKind::IRC_KIND_ACCEPT_FILE => {},
             IrcKind::IRC_KIND_REJECT_FILE => {},
             IrcKind::IRC_KIND_FILE_TRANSFER => {},
-            IrcKind::IRC_KIND_CLIENT_DEPARTS => {}, //meaningless to a client
-            IrcKind::IRC_KIND_SERVER_DEPARTS => {}, //Handled by Reader function
-            _ => {println!("Can't send Unknown type packet!");continue;},
+            _ => {},
         }
     }
 }
@@ -427,7 +416,7 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_FILE_TRANSFER => {
                       //  println!("Got file transfer packet.");
                     },
-                    IrcKind::IRC_KIND_CLIENT_DEPARTS => { println!("Got client departs packet...?"); },
+                    IrcKind::IRC_KIND_CLIENT_DEPARTS => {/* println!("Got client departs packet...?");*/ },
                     IrcKind::IRC_KIND_SERVER_DEPARTS => {
                         let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
                         ret_string = format!("Server disconnected with this message: \"{}\"", server_leaving.get_message());

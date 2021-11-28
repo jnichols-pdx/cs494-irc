@@ -18,12 +18,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc,RwLock};
 use ctrlc;
 
-
+/*
 #[derive(Clone, Debug)]
 pub struct ClientHandle {
     pub name: String,
     pub send_channel_sink: mpsc::Sender<SyncSendPack>,
-}
+}*/
 /*
 pub struct Client<'a,'b> {
     pub name: String,
@@ -40,12 +40,13 @@ pub struct Client<'a,'b> {
     pub master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
 }
 */
+/*
 #[derive(Clone, Debug)]
 pub struct RoomHandle {
     pub join_channel_sink: mpsc::Sender<ClientHandle>,
     pub post_channel_sink: mpsc::Sender<SyncSendPack>,
     pub leave_channel_sink: mpsc::Sender<String>,
-}
+}*/
 /*
 pub struct Room<'a,'b> {
     pub name: String,
@@ -80,14 +81,14 @@ async fn main() -> Result<'static, ()> {
 
     let mrc = master_rooms.clone();
     let muc = master_users.clone();
-    let listener_task= tokio::spawn(new_connections(listener, mrc, muc));
-    let stop_task = tokio::spawn(shutdown_monitor(r2));
 
     //let offline_message;
     //blocks until one of the tasks listed returns
     tokio::select!{
-        out = listener_task => {},//offline_message = format!("Response: {:?}",out?);},
-        _ = stop_task => {},//offline_message = "User asked to quit.".into();},
+        //out = listener_task => {},//offline_message = format!("Response: {:?}",out?);},
+        //_ = stop_task => {},//offline_message = "User asked to quit.".into();},
+        out = new_connections(listener, mrc, muc) => {},
+        _ = shutdown_monitor(r2) => {},
     }
     
     let final_users = master_users.write().unwrap(); //grab exclusive access to user to say our goodbyes.
@@ -107,7 +108,7 @@ async fn shutdown_monitor(running: Arc<AtomicBool>){
     loop {
         wait_period.tick().await;
         if !running.load(Ordering::SeqCst) {
-            println!("Caught SIGINT, shutting down.");
+            println!("\nCaught SIGINT, shutting down.");
             //ctrl-c was pressed, break to signal we should shutdown.
             //println!("Detected ctl-c");
             break;
@@ -137,8 +138,8 @@ async fn new_connections<'a>(listener: TcpListener, master_rooms: Arc<RwLock<Has
                         let master_rooms_copy = master_rooms.clone();
                         let mut should_reject;
                         {
-                            let mut master_users_open = master_users.read().unwrap();
-                            should_reject =  master_users_open.contains_key(&new_client.chat_name);
+                            let mut master_users_ro = master_users.read().unwrap();
+                            should_reject =  master_users_ro.contains_key(&new_client.chat_name);
                         } 
                         if should_reject {
                             println!("Rejecting duplicate user: {}", new_client.chat_name);
@@ -161,8 +162,8 @@ async fn new_connections<'a>(listener: TcpListener, master_rooms: Arc<RwLock<Has
                             let new_client_handle2 = new_client_handle1.clone();
 
                             {
-                                let mut master_users_ours = master_users.write().unwrap();
-                                master_users_ours.insert(client_name, new_client_handle1);
+                                let mut master_users_rw = master_users.write().unwrap();
+                                master_users_rw.insert(client_name, new_client_handle1);
                             }
                             tokio::spawn(client_lifecycle(socket, master_rooms_copy, master_users_copy, new_client_handle2, channel_source));
                         }
@@ -189,29 +190,37 @@ async fn client_lifecycle(mut socket: TcpStream, master_rooms: Arc<RwLock<HashMa
     let client_name = our_handle.name;
     let channel_sink = our_handle.send_channel_sink;
     let sink1 = channel_sink.clone();
+    let sink2 = channel_sink.clone();
+    let sink3 = channel_sink.clone();
     let found_pulse = Arc::new(AtomicBool::new(true));
     let fp = found_pulse.clone();
+    let (responder_sink, mut responder_source) = mpsc::channel::<SyncSendPack>(32);
+    let mrc = master_rooms.clone();
+    let muc = master_users.clone();
 
-    /*let send_task = tokio::spawn(writer(tcp_out, channel_source));
-    let heartbeat_task = tokio::spawn(pulse(sink1));
-    let watchdog_task = tokio::spawn(pulse_monitor(found_pulse));*/
-
-    let offline_message: &str;
+    let offline_message: String;
     tokio::select!{
-        //out = read_task => {offline_message = format!("{}",out??);},
-        //out = responder_task => {offline_message = format!("Response: {:?}",out?);},
-        /*_ = send_task => {offline_message = "Downstream connection ended.".into();},
-        _ = heartbeat_task => {offline_message = "Internal Error (server keepalive failed).".into();},
-        _ = watchdog_task => {offline_message = "No heartbeat responded in 30 seconds.".into();},*/
+        out = reader(tcp_in, responder_sink, fp, sink1) => {
+            match out {
+                Ok(msg) => offline_message = msg,
+                Err(e) => offline_message = format!("{}",e,),
+            };
+        },
+        out = responder(client_name.clone(), responder_source, sink3, mrc, muc) => {
+            match out {
+                Ok(msg) => offline_message = msg,
+                Err(e) => offline_message = format!("{}",e,),
+            };
+        },
         _ = writer(tcp_out, channel_source) => {offline_message = "Downstream connection ended.".into();},
-        _ = pulse(sink1) => {offline_message = "Internal Error (server keepalive failed).".into();},
+        _ = pulse(sink2) => {offline_message = "Internal Error (server keepalive failed).".into();},
         _ = pulse_monitor(found_pulse) => {offline_message = "No heartbeat responded in 30 seconds.".into();},
     }
 
     println!("Client '{}' ejected: {}",&client_name, &offline_message);
     {
-        let mut master_users_ours = master_users.write().unwrap();
-        master_users_ours.remove(&client_name);
+        let mut master_users_rw = master_users.write().unwrap();
+        master_users_rw.remove(&client_name);
     }
     
 
@@ -284,7 +293,7 @@ async fn writer<'a>(mut con: tokio::net::tcp::OwnedWriteHalf, mut rx_packets_to_
     Ok(())
 }
 
-async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>,tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, String> {
+async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mpsc::Sender<SyncSendPack>, found_pulse: Arc<AtomicBool>, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, String> {
     let mut peeker = [0; 5];
     let mut bytes_peeked;
     let mut ret_string = "Unexpected connection closure.".to_string();
@@ -300,7 +309,7 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_ERR => {
                         let my_error = ErrorPacket::from_bytes(&buffer[0..6])?;
                         match my_error.error_code {
-                            IrcErrCode::IRC_ERR_UNKNOWN => { ret_string = "Bogus! Server's confused (we received Error: Unknown)".into();},
+                            IrcErrCode::IRC_ERR_UNKNOWN => { ret_string = "Bogus! Client's confused (we received Error: Unknown)".into();},
                             IrcErrCode::IRC_ERR_ILLEGAL_KIND => { ret_string = "Bogus! Illegal Kind!".into();},
                             IrcErrCode::IRC_ERR_ILLEGAL_LENGTH => { ret_string = "Bogus! Illegal Length!".into();},
                             IrcErrCode::IRC_ERR_NAME_IN_USE => { ret_string = "Bogus! That name's taken!".into();},
@@ -313,32 +322,37 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                         }
                         break;
                     },
-                    IrcKind::IRC_KIND_NEW_CLIENT => {/*println!("Got New client packet...?");*/},
+                    IrcKind::IRC_KIND_NEW_CLIENT => {/*println!("Got New client packet...from an already connected client?");*/},
                     IrcKind::IRC_KIND_HEARTBEAT => {
                         found_pulse.store(true, Ordering::SeqCst);
                     },
-                    IrcKind::IRC_KIND_ENTER_ROOM => {/*println!("Got enter room packet...?");*/},
-                    IrcKind::IRC_KIND_LEAVE_ROOM => {/*println!("Got leave room packet...?");*/},
-                    IrcKind::IRC_KIND_LIST_ROOMS => {/*println!("Got list rooms packet...?");*/},
-                    IrcKind::IRC_KIND_ROOM_LISTING => {
-                        let room_list = RoomListingPacket::from_bytes(&buffer[..])?;
-                        tx_to_responder.send(room_list.into()).await?;
+                    IrcKind::IRC_KIND_ENTER_ROOM => {
+                        let enter_room = EnterRoomPacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(enter_room.into()).await?;
                     },
-                    IrcKind::IRC_KIND_USER_LISTING => {
-                        let user_list = UserListingPacket::from_bytes(&buffer[..])?;
-                        tx_to_responder.send(user_list.into()).await?;
+                    IrcKind::IRC_KIND_LEAVE_ROOM => {
+                        let leave_room = LeaveRoomPacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(leave_room.into()).await?;
                     },
+                    IrcKind::IRC_KIND_LIST_ROOMS => {
+                        let list_rooms = ListRoomsPacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(list_rooms.into()).await?;
+                    },
+                    IrcKind::IRC_KIND_ROOM_LISTING => {/*println!("Got room listing packet...?");*/},
+                    IrcKind::IRC_KIND_USER_LISTING => {/*println!("Got user listing packet...?");*/},
                     IrcKind::IRC_KIND_QUERY_USER => {
                         let query_result = QueryUserPacket::from_bytes(&buffer[..])?;
                         tx_to_responder.send(query_result.into()).await?;
                     },
-                    IrcKind::IRC_KIND_SEND_MESSAGE => {/*println!("Got send message packet...?");*/},
-                    IrcKind::IRC_KIND_BROADCAST_MESSAGE => {/*println!("Got broadcast message packet...?");*/},
-                    IrcKind::IRC_KIND_POST_MESSAGE => {
-                        let new_message = PostMessagePacket::from_bytes(&buffer[..])?;
-                        tx_to_responder.send(new_message.into()).await?;
+                    IrcKind::IRC_KIND_SEND_MESSAGE => {
+                        let send_message = SendMessagePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(send_message.into()).await?;
                     },
-
+                    IrcKind::IRC_KIND_BROADCAST_MESSAGE => {
+                        let broadcast_message = BroadcastMessagePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(broadcast_message.into()).await?;
+                    },
+                    IrcKind::IRC_KIND_POST_MESSAGE => {/*println!("Got user listing packet...?");*/},
                     IrcKind::IRC_KIND_DIRECT_MESSAGE => {
                         let new_direct = DirectMessagePacket::from_bytes(&buffer[..])?;
                         tx_to_responder.send(new_direct.into()).await?;
@@ -355,12 +369,12 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
                     IrcKind::IRC_KIND_FILE_TRANSFER => {
                       //  println!("Got file transfer packet.");
                     },
-                    IrcKind::IRC_KIND_CLIENT_DEPARTS => { println!("Got client departs packet...?"); },
-                    IrcKind::IRC_KIND_SERVER_DEPARTS => {
-                        let  server_leaving = ServerDepartsPacket::from_bytes(&buffer[..])?;
-                        ret_string = format!("Server disconnected with this message: \"{}\"", server_leaving.get_message());
+                    IrcKind::IRC_KIND_CLIENT_DEPARTS => {
+                        let  client_leaving = ClientDepartsPacket::from_bytes(&buffer[..])?;
+                        ret_string = format!("Client disconnected with this message: \"{}\"", client_leaving.get_message());
                         break;
                     },
+                    IrcKind::IRC_KIND_SERVER_DEPARTS => {/*println!("Got server departs packet...?");*/},
                     _ => {
                             let _ =  writeln!(stderr(),"Error: Unknown packet recieved:\n{:?}\n",&buffer[0..bytes_read]);
                             let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)
@@ -373,10 +387,138 @@ async fn reader<'a>(mut con: tokio::net::tcp::OwnedReadHalf, tx_to_responder: mp
         }else {
             if bytes_peeked == 0{
                 //println!("Read connection to server has closed.");
-                ret_string = "Read connection to server has closed.".into();
+                ret_string = "Read connection to client has closed.".into();
                 break;
             }
         }
     }
     Ok(ret_string.into())
+}
+
+async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<SyncSendPack>, channel_sink: mpsc::Sender<irclib::SyncSendPack>,master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>, master_users: Arc<RwLock<HashMap<String, ClientHandle>>>) -> Result<'a, String> {
+    let mut cached_rooms : HashMap<String, RoomHandle> =  HashMap::new();//<String, RoomHandle>
+    let mut cached_users : HashMap<String, ClientHandle>=  HashMap::new();//<String, ClientHandle>
+
+    let ret_string : String = "".to_string();
+    while let Some(packet) = packet_source.recv().await {
+        match packet.contained_kind {
+            IrcKind::IRC_KIND_NEW_CLIENT => {},
+            IrcKind::IRC_KIND_ENTER_ROOM => {
+                let erp = packet.erp.unwrap();
+                let our_room_handle;
+                {
+                    let master_rooms_ro;
+                    match master_rooms.read() {
+                        Ok(ro) => master_rooms_ro = ro,
+                        Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                    }
+                    match master_rooms_ro.get(&erp.room_name) {
+                        Some(rh) => { //room exists, cache it for later
+                            cached_rooms.insert(erp.room_name, rh.clone());
+                            our_room_handle = rh.clone();
+                        },
+                        None => {//make room then join it
+                            our_room_handle = make_room();
+                        },
+                    };
+                }
+
+                let handle_to_this_client = ClientHandle{
+                    name: client_name.clone(),
+                    send_channel_sink: channel_sink.clone(),
+                };
+
+                our_room_handle.join_channel_sink.send(handle_to_this_client).await?;
+                //Room will send its user list to the client after we join, indicating join success
+                //to the client.
+            },
+            IrcKind::IRC_KIND_LEAVE_ROOM => {},
+            IrcKind::IRC_KIND_LIST_ROOMS => {
+                let mut outgoing = RoomListingPacket::new()?;
+                {
+                    let master_rooms_ro;
+                    match master_rooms.read() {
+                        Ok(ro) => master_rooms_ro = ro,
+                        Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                    }
+                    for (key,_) in master_rooms_ro.iter() {
+                        outgoing.push(key)?;
+                    }
+                }
+                channel_sink.send(outgoing.into()).await?;
+            },
+            IrcKind::IRC_KIND_QUERY_USER => {
+                let qup = packet.qup.unwrap();
+                let user_name = qup.user_name.to_owned();
+                let status = qup.status.to_owned();
+            },
+            IrcKind::IRC_KIND_SEND_MESSAGE => {},
+            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {},
+            IrcKind::IRC_KIND_POST_MESSAGE => { },
+            IrcKind::IRC_KIND_DIRECT_MESSAGE => { },
+            IrcKind::IRC_KIND_OFFER_FILE => {},
+            IrcKind::IRC_KIND_ACCEPT_FILE => {},
+            IrcKind::IRC_KIND_REJECT_FILE => {},
+            IrcKind::IRC_KIND_FILE_TRANSFER => {},
+            _ => {},
+        }
+    }
+    Ok(ret_string.into())
+}
+
+pub fn make_room( ) -> RoomHandle {
+    let (join_channel_sink, mut join_channel_source) = mpsc::channel::<ClientHandle>(32);
+    let (post_channel_sink, mut post_channel_source) = mpsc::channel::<SyncSendPack>(64);
+    let (leave_channel_sink, mut leave_channel_source) = mpsc::channel::<String>(32);
+
+    tokio::spawn(room_lifecycle(join_channel_source, post_channel_source, leave_channel_source));
+
+    let new_room_handle = RoomHandle {
+        join_channel_sink: join_channel_sink,
+        post_channel_sink: post_channel_sink,
+        leave_channel_sink: leave_channel_sink,
+    };
+    new_room_handle
+}
+
+async fn room_lifecycle(mut join_source: mpsc::Receiver<ClientHandle>,mut post_source: mpsc::Receiver<SyncSendPack>,mut leave_source: mpsc::Receiver<String>){
+ /*   //Split the TcpStream into reader and writer, pass each to their own asynchronous task
+    let (tcp_in, tcp_out) = socket.into_split();
+    let client_name = our_handle.name;
+    let channel_sink = our_handle.send_channel_sink;
+    let sink1 = channel_sink.clone();
+    let sink2 = channel_sink.clone();
+    let sink3 = channel_sink.clone();
+    let found_pulse = Arc::new(AtomicBool::new(true));
+    let fp = found_pulse.clone();
+    let (responder_sink, mut responder_source) = mpsc::channel::<SyncSendPack>(32);
+    let mrc = master_rooms.clone();
+    let muc = master_users.clone();
+
+    let offline_message: String;
+    tokio::select!{
+        out = reader(tcp_in, responder_sink, fp, sink1) => {
+            match out {
+                Ok(msg) => offline_message = msg,
+                Err(e) => offline_message = format!("{}",e,),
+            };
+        },
+        out = responder(client_name.clone(), responder_source, sink3, mrc, muc) => {
+            match out {
+                Ok(msg) => offline_message = msg,
+                Err(e) => offline_message = format!("{}",e,),
+            };
+        },
+        _ = writer(tcp_out, channel_source) => {offline_message = "Downstream connection ended.".into();},
+        _ = pulse(sink2) => {offline_message = "Internal Error (server keepalive failed).".into();},
+        _ = pulse_monitor(found_pulse) => {offline_message = "No heartbeat responded in 30 seconds.".into();},
+    }
+
+    println!("Client '{}' ejected: {}",&client_name, &offline_message);
+    {
+        let mut master_users_rw = master_users.write().unwrap();
+        master_users_rw.remove(&client_name);
+    }
+    
+*/
 }

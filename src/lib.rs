@@ -11,9 +11,23 @@ use std::convert::{TryFrom, TryInto};
 use std::io;
 use std::fmt;
 use thiserror::Error;
+use tokio::sync::mpsc;
 
 /// Result type for IRC  errors.
 pub type Result<'a, T> = std::result::Result<T, IrcError>;
+
+#[derive(Clone, Debug)]
+pub struct ClientHandle {
+    pub name: String,
+    pub send_channel_sink: mpsc::Sender<SyncSendPack>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RoomHandle {
+    pub join_channel_sink: mpsc::Sender<ClientHandle>,
+    pub post_channel_sink: mpsc::Sender<SyncSendPack>,
+    pub leave_channel_sink: mpsc::Sender<String>,
+}
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, FromPrimitive, PartialEq, Debug)]
@@ -109,8 +123,21 @@ pub enum IrcError {
     #[error("Encountered Join Error: {0}")]
     JoinErr(tokio::task::JoinError),
 
-    #[error("Encountered mpsc Send error: {0}")]
+    //TODO: Learn how to combine the SendError types using Generics.
+    #[error("Encountered mpsc Send Packet error: {0}")]
     SendPackErr(tokio::sync::mpsc::error::SendError<SyncSendPack>),
+
+    #[error("Encountered mpsc Send String error: {0}")]
+    SendStringErr(tokio::sync::mpsc::error::SendError<String>),
+
+    #[error("Encountered mpsc Send ClientHandle error: {0}")]
+    SendClientHandleErr(tokio::sync::mpsc::error::SendError<ClientHandle>),
+
+    //Replacement for library error with a complex type
+    //TODO: Figure out how to wrap a PoisonError<std::sync::RwLockReadGuard<'_, HashMap<String, ClientHandle>>>
+    //      to match the behavior for other library errors we want to convey inside an IrcError.
+    #[error("Encountered poisoned mutex error: {0}")]
+    PoisonedErr(String),
 }
 
 impl From<io::Error> for IrcError {
@@ -142,6 +169,19 @@ impl From<tokio::sync::mpsc::error::SendError<SyncSendPack>> for IrcError {
         IrcError::SendPackErr(err)
     }
 }
+
+impl From<tokio::sync::mpsc::error::SendError<String>> for IrcError {
+    fn from(err: tokio::sync::mpsc::error::SendError<String>) -> IrcError {
+        IrcError::SendStringErr(err)
+    }
+}
+
+impl From<tokio::sync::mpsc::error::SendError<ClientHandle>> for IrcError {
+    fn from(err: tokio::sync::mpsc::error::SendError<ClientHandle>) -> IrcError {
+        IrcError::SendClientHandleErr(err)
+    }
+}
+
 
 ///////////////////////////////////////////////
 // UTILITY functions
