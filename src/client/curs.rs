@@ -125,25 +125,37 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                         });
                     },
                     Some("/yell") | Some("/broadcast") => {
-                        //TODO: broadcast messages.
+                        let body_text;
+                        if text.starts_with("/yell") {
+                            body_text = text.split_at(5).1.trim_start(); //assigning tuple element #1
+                        } else {
+                            body_text = text.split_at(10).1.trim_start();
+                        }
+                        if body_text.len() > 0 {
+                            let outgoing = BroadcastMessagePacket::new(&body_text.to_string())?;
+                            tx_packet_out.blocking_send(outgoing.into())?;
+                        }
                     },
                     Some(_) | None => (),
                 };
             } else {
                 //Not a command, send text to a room or DM conversation!
 
-                if is_dm {
-                    //local echo of outgoing text:
-                    let outgoing = DirectMessagePacket::new(&tab_name[3..].to_string(), &text.to_string())?;
-                    s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
-                        content.append(format!("You: {}\n", text));
-                    });
-                    tx_packet_out.blocking_send(outgoing.into())?;
-                } else {
-                    let outgoing = SendMessagePacket::new(&tab_name.to_string(), &text.to_string())?;
-                    tx_packet_out.blocking_send(outgoing.into())?;
-                }
+                let body_text = text.trim_start();
+                if body_text.len() > 0 {
+                    if is_dm {
+                        //local echo of outgoing text:
+                        let outgoing = DirectMessagePacket::new(&tab_name[3..].to_string(), &body_text.to_string())?;
+                        s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
+                            content.append(format!("You: {}\n", body_text));
+                        });
+                        tx_packet_out.blocking_send(outgoing.into())?;
+                    } else {
+                        let outgoing = SendMessagePacket::new(&tab_name.to_string(), &body_text.to_string())?;
+                        tx_packet_out.blocking_send(outgoing.into())?;
+                    }
 
+                }
             }
 
         },

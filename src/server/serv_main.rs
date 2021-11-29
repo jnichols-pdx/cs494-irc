@@ -453,7 +453,14 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                     None => {},
                };
             },
-            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {},
+            IrcKind::IRC_KIND_BROADCAST_MESSAGE => {
+                let bmp = packet.bmp.unwrap();
+                let message = bmp.get_message();
+                for (room, handle) in &cached_rooms {
+                    let post_message = PostMessagePacket::new(&room, &client_name, &message)?;
+                    handle.post_channel_sink.send(post_message.into()).await?;
+                };
+            },
             IrcKind::IRC_KIND_DIRECT_MESSAGE => { },
             IrcKind::IRC_KIND_OFFER_FILE => {},
             IrcKind::IRC_KIND_ACCEPT_FILE => {},
@@ -550,7 +557,6 @@ async fn room_lifecycle<'a>(room_name: String, mut join_source: mpsc::Receiver<C
         }
         master_rooms_rw.remove(&room_name);
         for (key,_) in master_rooms_rw.iter() {
-            println!("Pushing room key {}", key);
             outgoing.push(key)?;
         }
     }
