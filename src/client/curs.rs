@@ -87,12 +87,27 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                             None => (),
                         };
                     },
-                    Some("/whisper") => {
+                    Some("/whisper") | Some("/tell") => {
                         match tokens.next() {
                             Some(user_name) => {
                                 let message_start = text.find(user_name).unwrap() + user_name.len();
-                                let outgoing = DirectMessagePacket::new(&user_name.to_string(), &text[message_start..].trim_start().to_string())?;
+                                let body_text = &text[message_start..].trim_start().to_string();
+                                let outgoing = DirectMessagePacket::new(&user_name.to_string(), &body_text)?;
                                 tx_packet_out.blocking_send(outgoing.into())?;
+                                let txr = tx_packet_out.clone();
+
+                                //create the conversation tab if necessary, and echo display
+                                //outgoing message.
+                                match s.find_name::<TextView>(format!("DM:{}-------------------------content", user_name).as_str()) {
+                                    Some(mut convo) =>{
+                                        convo.append(format!("You: {}\n", body_text));
+                                    },
+                                    None =>{
+                                        s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
+                                            tab_controller.add_tab(make_dm_room(user_name.clone().into(),format!("You: {}\n", body_text).into(), txr));
+                                        });
+                                    },
+                                };
                             },
                             None => (),
                         };

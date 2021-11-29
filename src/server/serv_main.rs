@@ -419,7 +419,7 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                         rh.leave_channel_sink.send(client_name.clone()).await?;
                     },
                     None => {},
-               };
+                };
 
             },
             IrcKind::IRC_KIND_LIST_ROOMS => {
@@ -438,8 +438,26 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
             },
             IrcKind::IRC_KIND_QUERY_USER => {
                 let qup = packet.qup.unwrap();
+                let mut theyre_online;
+                {
+                    let master_users_ro;
+                    match master_users.read() {
+                        Ok(ro) => master_users_ro = ro,
+                        Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                    }
+                    match master_users_ro.get(&qup.user_name) {
+                        Some(h) =>{theyre_online = true}
+                        None => {theyre_online = false},
+                    }
+                }
+                let mut reply = QueryUserPacket::new(&qup.user_name)?;
+                if theyre_online {
+                    reply.set_online();
+                } else {
+                    reply.set_offline();
+                }
+                channel_sink.send(reply.into()).await?;
 
-                //TODO: lokup and respond.
             },
             IrcKind::IRC_KIND_SEND_MESSAGE => {
                 let smp = packet.smp.unwrap();
@@ -461,7 +479,57 @@ async fn responder<'a>(client_name: String, mut packet_source: mpsc::Receiver<Sy
                     handle.post_channel_sink.send(post_message.into()).await?;
                 };
             },
-            IrcKind::IRC_KIND_DIRECT_MESSAGE => { },
+            IrcKind::IRC_KIND_DIRECT_MESSAGE => {
+                let dmp = packet.dmp.unwrap();
+                let outgoing = DirectMessagePacket::new(&client_name.clone(), &dmp.message.clone())?;
+                let mut need_lookup = false;
+                match cached_users.get(&dmp.target) {
+                    Some(user) => { 
+                        match user.send_channel_sink.send(outgoing.clone().into()).await {
+                            Ok(_) => {},
+                            // Recipient may have logged off and back on - invalidating the
+                            // cached handle. 
+                            Err(_) => {
+                                cached_users.remove(&dmp.target);
+                                need_lookup = true;
+                            },
+                        };
+                    },
+                    None => {need_lookup = true;},
+                };
+
+                if need_lookup {
+                    let their_new_handle : Option::<ClientHandle>;
+                    {
+                        let master_users_ro;
+                        match master_users.read() {
+                            Ok(ro) => master_users_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}",e))),
+                        }
+                        their_new_handle= match master_users_ro.get(&dmp.target) {
+                            Some(h) =>{
+                                cached_users.insert(dmp.target.clone(), h.clone());
+                               Some(h.clone())
+                            }
+                            None => {
+                                None
+                            },
+                        }
+                    }
+                    match their_new_handle {
+                        Some(handle) => {
+                            handle.send_channel_sink.send(outgoing.into()).await?;
+                        }
+                        None => {
+                            let mut reply = QueryUserPacket::new(&dmp.target)?;
+                            reply.set_offline();
+                            channel_sink.send(reply.into()).await?;
+                        },
+                    
+                    };
+                }
+
+            },
             IrcKind::IRC_KIND_OFFER_FILE => {},
             IrcKind::IRC_KIND_ACCEPT_FILE => {},
             IrcKind::IRC_KIND_REJECT_FILE => {},
