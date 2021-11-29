@@ -135,6 +135,18 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                         });
                     },
                     Some("/offer") => {
+                        match tokens.next() {
+                            Some(recipient) => {
+                                //get file name
+                                //read file if popsible
+                                //send offer packet.
+                                //register pending transfer...
+
+
+                            },
+                            None => {},
+                        }
+
                         s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
                             content.append("OFFERCOMMAND");
                         });

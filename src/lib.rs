@@ -8,8 +8,8 @@ use lazy_static::lazy_static;
 use num_enum::FromPrimitive;
 use regex::Regex;
 use std::convert::{TryFrom, TryInto};
-use std::io;
 use std::fmt;
+use std::io;
 use thiserror::Error;
 use tokio::sync::mpsc;
 
@@ -182,7 +182,6 @@ impl From<tokio::sync::mpsc::error::SendError<ClientHandle>> for IrcError {
     }
 }
 
-
 ///////////////////////////////////////////////
 // UTILITY functions
 ///////////////////////////////////////////////
@@ -341,7 +340,6 @@ pub trait IrcPacket {
     fn from_bytes(source: &[u8]) -> Result<Self>
     where
         Self: Sized;
-
 }
 
 /////////////////////////////
@@ -351,7 +349,7 @@ pub trait IrcPacket {
 //Rust's requirements for moving data between threads require said data to implement
 //both SYNC and SEND traits. All of the concrete implementations of my IrcPacket trait
 //ARE SYNC and SEND, however I haven't found a way to mark a *trait* as SYNC/SEND...
-//Which is reasonable as we have no gaurantees that some other user wouldn't make their 
+//Which is reasonable as we have no gaurantees that some other user wouldn't make their
 //own concrete implementation of IrcPacket that was NOT Sync and Send.
 //
 //This means that if I cannot stuff an 'IrcPacket' through an MPSC channel. I can instead
@@ -443,7 +441,7 @@ impl From<HeartbeatPacket> for SyncSendPack {
     fn from(packet_in: HeartbeatPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_HEARTBEAT,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: Some(packet_in),
             erp: None,
@@ -470,7 +468,7 @@ impl From<EnterRoomPacket> for SyncSendPack {
     fn from(packet_in: EnterRoomPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_ENTER_ROOM,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: Some(packet_in),
@@ -497,7 +495,7 @@ impl From<LeaveRoomPacket> for SyncSendPack {
     fn from(packet_in: LeaveRoomPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_LEAVE_ROOM,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -524,7 +522,7 @@ impl From<ListRoomsPacket> for SyncSendPack {
     fn from(packet_in: ListRoomsPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_LIST_ROOMS,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -551,7 +549,7 @@ impl From<RoomListingPacket> for SyncSendPack {
     fn from(packet_in: RoomListingPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_ROOM_LISTING,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -578,7 +576,7 @@ impl From<UserListingPacket> for SyncSendPack {
     fn from(packet_in: UserListingPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_USER_LISTING,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -605,7 +603,7 @@ impl From<QueryUserPacket> for SyncSendPack {
     fn from(packet_in: QueryUserPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_QUERY_USER,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -632,7 +630,7 @@ impl From<SendMessagePacket> for SyncSendPack {
     fn from(packet_in: SendMessagePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_SEND_MESSAGE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -659,7 +657,7 @@ impl From<BroadcastMessagePacket> for SyncSendPack {
     fn from(packet_in: BroadcastMessagePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_BROADCAST_MESSAGE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -686,7 +684,7 @@ impl From<PostMessagePacket> for SyncSendPack {
     fn from(packet_in: PostMessagePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_POST_MESSAGE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -713,7 +711,7 @@ impl From<DirectMessagePacket> for SyncSendPack {
     fn from(packet_in: DirectMessagePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_DIRECT_MESSAGE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -740,7 +738,7 @@ impl From<OfferFilePacket> for SyncSendPack {
     fn from(packet_in: OfferFilePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_OFFER_FILE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -767,7 +765,7 @@ impl From<AcceptFilePacket> for SyncSendPack {
     fn from(packet_in: AcceptFilePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_ACCEPT_FILE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -794,7 +792,7 @@ impl From<RejectFilePacket> for SyncSendPack {
     fn from(packet_in: RejectFilePacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_REJECT_FILE,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -821,7 +819,7 @@ impl From<FileTransferPacket> for SyncSendPack {
     fn from(packet_in: FileTransferPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_FILE_TRANSFER,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -848,7 +846,7 @@ impl From<ClientDepartsPacket> for SyncSendPack {
     fn from(packet_in: ClientDepartsPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_CLIENT_DEPARTS,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -875,7 +873,7 @@ impl From<ServerDepartsPacket> for SyncSendPack {
     fn from(packet_in: ServerDepartsPacket) -> SyncSendPack {
         SyncSendPack {
             contained_kind: IrcKind::IRC_KIND_SERVER_DEPARTS,
-            errp:None,
+            errp: None,
             ncp: None,
             hbp: None,
             erp: None,
@@ -1394,12 +1392,12 @@ pub enum UserStatus {
 
 impl fmt::Display for UserStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-       match *self {
-        UserStatus::Online => write!(f, "Online"),
-        UserStatus::Offline => write!(f, "Offline"),
-        UserStatus::Request => write!(f, "Status Requested"),
-        UserStatus::NO_MATCH_USER_STATUS => write!(f, "Unknown"),
-       }
+        match *self {
+            UserStatus::Online => write!(f, "Online"),
+            UserStatus::Offline => write!(f, "Offline"),
+            UserStatus::Request => write!(f, "Status Requested"),
+            UserStatus::NO_MATCH_USER_STATUS => write!(f, "Unknown"),
+        }
     }
 }
 
@@ -1459,7 +1457,8 @@ impl IrcPacket for QueryUserPacket {
 
         let new_username = valid_name(&name_from_slice(&source[5..69])?)?.to_owned();
 
-        let new_user_status: UserStatus = UserStatus::from(source[69]); match new_user_status {
+        let new_user_status: UserStatus = UserStatus::from(source[69]);
+        match new_user_status {
             UserStatus::NO_MATCH_USER_STATUS => Err(IrcError::CodeOutOfRange()),
             user_status => Ok(QueryUserPacket {
                 user_name: new_username,
