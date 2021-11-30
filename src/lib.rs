@@ -124,8 +124,11 @@ pub enum IrcError {
     JoinErr(tokio::task::JoinError),
 
     //TODO: Learn how to combine the SendError types using Generics.
+    //Per suggestion by Clippy, boxed the internal error for this
+    //variant as the SendError for SyncSendPack is much larger than
+    //the rest.
     #[error("Encountered mpsc Send Packet error: {0}")]
-    SendPackErr(tokio::sync::mpsc::error::SendError<SyncSendPack>),
+    SendPackErr(Box<tokio::sync::mpsc::error::SendError<SyncSendPack>>),
 
     #[error("Encountered mpsc Send String error: {0}")]
     SendStringErr(tokio::sync::mpsc::error::SendError<String>),
@@ -166,7 +169,8 @@ impl From<tokio::task::JoinError> for IrcError {
 
 impl From<tokio::sync::mpsc::error::SendError<SyncSendPack>> for IrcError {
     fn from(err: tokio::sync::mpsc::error::SendError<SyncSendPack>) -> IrcError {
-        IrcError::SendPackErr(err)
+        //Boxed internal error per Clippy suggestion
+        IrcError::SendPackErr(Box::new(err))
     }
 }
 
@@ -186,7 +190,7 @@ impl From<tokio::sync::mpsc::error::SendError<ClientHandle>> for IrcError {
 // UTILITY functions
 ///////////////////////////////////////////////
 
-pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
+pub fn valid_name(name: &str) -> Result<&str> {
     //NAMES
     //must be 64 bytes or less in utf-8 encoding,
     //must be more than 0 and less than 32 codepoints,
@@ -220,7 +224,7 @@ pub fn valid_name<'a>(name: &'a String) -> Result<&'a String> {
     Ok(name)
 }
 
-pub fn valid_message<'a>(message: &'a String) -> Result<&'a String> {
+pub fn valid_message(message: &str) -> Result<&str> {
     //MESSAGES
     //must be 12000 bytes or less in utf-8 encoding,
     //must be more than 0 codepoints,
@@ -260,7 +264,7 @@ pub fn valid_message<'a>(message: &'a String) -> Result<&'a String> {
     Ok(message)
 }
 
-pub fn valid_filename<'a>(file_name: &'a String) -> Result<&'a String> {
+pub fn valid_filename(file_name: &str) -> Result<&str> {
     //FILE NAMES
     //may be up to 1024 bytes in utf-8 encoding,
     //must be more than 0 codepoints,
@@ -316,7 +320,7 @@ pub fn name_from_slice(source: &[u8]) -> Result<String> {
     if source.len() != 64 {
         return Err(IrcError::PacketLengthIncorrect(source.len(), 64));
     }
-    match String::from_utf8(get_sixtyfour_bytes_as_array(&source[..]).to_vec()) {
+    match String::from_utf8(get_sixtyfour_bytes_as_array(&source).to_vec()) {
         Ok(mut n) => match n.find('\0') {
             Some(pos) => {
                 n.truncate(pos);
@@ -955,7 +959,7 @@ pub struct NewClientPacket {
 }
 
 impl NewClientPacket {
-    pub fn new(name: &String) -> Result<Self> {
+    pub fn new(name: &str) -> Result<Self> {
         let v_name = valid_name(name)?;
         Ok(NewClientPacket {
             chat_name: v_name.to_owned(),
@@ -2038,9 +2042,9 @@ impl FileTransferPacket {
         }
 
         Ok(FileTransferPacket {
-            transfer_id: transfer_id,
-            finished: finished,
-            data: data,
+            transfer_id,
+            finished,
+            data,
         })
     }
 }

@@ -104,7 +104,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                                     },
                                     None =>{
                                         s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
-                                            tab_controller.add_tab(make_dm_room(user_name.clone().into(),format!("You: {}\n", body_text).into(), txr));
+                                            tab_controller.add_tab(make_dm_room(user_name.into(),format!("You: {}\n", body_text).into(), txr));
                                         });
                                     },
                                 };
