@@ -461,7 +461,7 @@ fn enter_room_packet_from_bytes() {
 
 #[test]
 fn enter_room_packet_as_bytes() {
-    let erp = EnterRoomPacket::new(&"ExampleName".to_string()).unwrap();
+    let erp = EnterRoomPacket::new("ExampleName".to_string()).unwrap();
     assert_eq!(erp.as_bytes(), Bytes::from_static(b"\x04\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
 
@@ -538,7 +538,7 @@ fn leave_room_packet_from_bytes() {
 
 #[test]
 fn leave_room_packet_as_bytes() {
-    let lrp = LeaveRoomPacket::new(&"ExampleName".to_string()).unwrap();
+    let lrp = LeaveRoomPacket::new("ExampleName".to_string()).unwrap();
     assert_eq!(lrp.as_bytes(), Bytes::from_static(b"\x05\0\0\0\x40ExampleName\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
 
