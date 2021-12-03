@@ -1,4 +1,4 @@
-# CS494 Irc Chat System
+# CS494 IRC Chat System
 
 Yet Another Rust IRC Client - A client and server implementation of a custom internet relay chat protocol.
 This client and server are _not_ compatible with RFC 1459. The chat client uses the Cursive library to
@@ -85,7 +85,7 @@ of them as commands:
 # Known Bugs:
 
 There is a bug in either the library crate which provides Tabbed views in Cursive, or how this client 
-interacts with them. If one switches to a chat tab that is NOT at the right end of the list with the 
+interacts with them. If one switches to a chat tab that is _not_ at the right end of the list with the 
 ctrl + arrow key shortcuts, /leaves that chat window, and then clicks on one of the remaining tabs the
 UI thread may crash. To avoid this error one should first switch to a tab they wish to close either by
 clicking on its name, or by highlighting its tab with the arrow keys and pressing Enter. If you are
