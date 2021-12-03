@@ -87,9 +87,9 @@ async fn new_connections<'a>(
         bytes_peeked = socket.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
-            let mut buffer = vec![0; msg_len + 5];
-            let bytes_read = socket.read(&mut buffer).await?;
-            if bytes_read == msg_len + 5 {
+            let mut buffer = vec![0u8; msg_len + 5];
+            socket.read_exact(&mut buffer).await?;
+            {
                 let kind_raw = IrcKind::from(buffer[0]);
                 match kind_raw {
                     IrcKind::IRC_KIND_NEW_CLIENT => {
@@ -139,7 +139,7 @@ async fn new_connections<'a>(
                         }
                     }
                     _ => {
-                        let _ =  writeln!(stderr(),"Error: Expected New Client Packet for new connection, received:\n{:?}\n",&buffer[0..bytes_read]);
+                        let _ =  writeln!(stderr(),"Error: Expected New Client Packet for new connection, received:\n{:?}\n",&buffer);
                         let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)
                             .expect("Error packets should be infallible on creation");
                         socket.write(&error_notice.as_bytes()).await?;
@@ -338,9 +338,9 @@ async fn reader<'a>(
         bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
-            let mut buffer = vec![0; msg_len + 5];
-            let bytes_read = con.read(&mut buffer).await?;
-            if bytes_read == msg_len + 5 {
+            let mut buffer = vec![0u8; msg_len + 5];
+            con.read_exact(&mut buffer).await?;
+            {
                 let kind_raw = IrcKind::from(buffer[0]);
                 match kind_raw {
                     IrcKind::IRC_KIND_ERR => {
@@ -443,7 +443,7 @@ async fn reader<'a>(
                         let _ = writeln!(
                             stderr(),
                             "Error: Unknown packet recieved:\n{:?}\n",
-                            &buffer[0..bytes_read]
+                            &buffer
                         );
                         let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)
                             .expect("Error packets should be infallible on creation");
