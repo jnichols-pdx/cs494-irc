@@ -21,6 +21,13 @@ for information sent between the chat client and server. This is _not_ the inter
 standard IRC protocol as defined in RFC 1459. See the file RFC_DRAFT_JTN4.pdf for
 protocol details.
 
+## Compiling
+
+The client and server may be compiled with the command `cargo build`.
+
+A suite of unit tests may be run against the library code shared in common by the server
+and client with the command `cargo test`. 
+
 ## Usage - server
 
 The chat server automatically listens on port 17734 for connections from chat clients.
@@ -30,16 +37,20 @@ The server may be stopped by pressing ctrl-c on the commandline.
 
 ## Usage - client
 
-The client may be started via cargo with the command `cargo run --bin client <username> [server]`
+The client may be started via cargo with the command
+
+`cargo run --bin client <username> [server]`
+
 By default the client attempts to connect to localhost on port 17734.
 
 `<username>` is mandatory and sets your IRC username / handle which is visible to other chat users.
 
-Usernames may not contain spaces and are limited to the lesser of 32 unicode characters or 64 bytes.
+Usernames may not contain spaces and are limited to the lesser of 32 unicode characters or 64 utf-8 encoded bytes.
 
 The server will reject a client connection if the chosen username is already in use.
 
-[server] takes the form `ip-address:port` and specifies the address of the server to connect to.
+`server` is optional and takes the form `ip-address:port`
+This specifies the IP address and port to which the client should connect to when looking for an IRC server.
 While the client may specify a custom port, the server is currently hard coded to only listen on port 17734.
 
 The client may be closed by pressing either ctrl-c or ctrl-q.
