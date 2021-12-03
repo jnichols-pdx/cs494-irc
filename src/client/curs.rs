@@ -1,3 +1,7 @@
+// James Nichols, jtn4@pdx.edu, CS494p Internetworking Protocols
+// Fall 2021 Term Project: IRC client
+// curs.rs - User Interface implementation for an IRC Client
+
 use cursive::views::TextView;
 use cursive_tabs::TabPanel;
 use cursive::view::*;
@@ -9,6 +13,7 @@ use irclib::{*};
 use tokio::sync::mpsc;
 
 
+//Creates a new tab holding an IRC chat room and adds it to the UI. 
 pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
     //We do want to be able to address the subregions of a tab later, however the field used for
     //the title of a tab in the cursive-tabs library is also the field used by the cursive library
@@ -41,6 +46,7 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender
     LinearLayout::vertical().child(sideways).child(Panel::new(input).min_height(3)).full_screen().with_name(name)
 }
 
+//Creates a new tab holding an IRC Direct Message session and adds it to the UI. 
 pub fn make_dm_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
     let body = TextView::new(initial_text).with_name(format!("DM:{}-------------------------content",name))
         .scrollable()
@@ -56,6 +62,8 @@ pub fn make_dm_room(name: String, initial_text: String, tx_packet_out: mpsc::Sen
     tab_contents
 }
 
+//Parses user input typed into a chat room / DM tab. Either reacts to specific commands or sends
+//the message to the IRC server.
 pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>, is_dm: bool) -> Result<'a, ()>{
   
     //Which tab are we in.
@@ -176,6 +184,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
     Ok(())
 }
 
+//Handles keyboard shortcut to swap to the previous tab
 pub fn switch_prev(s: &mut Cursive){
     s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
             tab_controller.prev();
@@ -184,6 +193,7 @@ pub fn switch_prev(s: &mut Cursive){
     focus_input_line(s);
 }
 
+//Handles keyboard shortcut to swap to the next tab
 pub fn switch_next(s: &mut Cursive){
     s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel| {
             tab_controller.next();
@@ -192,6 +202,8 @@ pub fn switch_next(s: &mut Cursive){
     focus_input_line(s);
 }
 
+//After switching tabs, the input focus moves to the tab in the tab bar, move the focus back down
+//to the text input line on the tab to let the user type their messages immediately.
 pub fn focus_input_line(s: &mut Cursive){
     
     let current_tab_opt_opt = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
@@ -209,8 +221,9 @@ pub fn focus_input_line(s: &mut Cursive){
 
 }
 
+//Builds the First tab in the UI interface, which offers the list of known rooms and options to
+//create new chat rooms.
 pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
-
     let mut tx1 = tx_packet_out.clone();
     let mut tx2 = tx_packet_out.clone();
     let select = SelectView::<String>::new()
@@ -235,6 +248,7 @@ pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Nam
         .with_name("<Rooms>")
 }
 
+//Opens a dialog window to enter a new chatroom name
 pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let txf = tx_packet_out.clone();
     fn send_new_packet(s: &mut Cursive, new_room_name: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>){
@@ -281,14 +295,16 @@ pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib:
 }
 
 
+//Handles when a user clicks on a room name in the Rooms tab list OR highlights a room with the
+//arrow keys and presses Enter.
 pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let outgoing = EnterRoomPacket::new(name.to_string())?;
     tx_packet_out.blocking_send(outgoing.into())?;
     Ok(())
 }
 
+//Handles when a user clicks the Join button on the Rooms tab.
 pub fn choose_room_button<'a>(s: &mut Cursive, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
-
     let select_ref = s.find_name::<SelectView<String>>("Rooms----------------------select").unwrap();
     if let Some(n) = select_ref.selection() {
             let outgoing = EnterRoomPacket::new(n.to_string())?;

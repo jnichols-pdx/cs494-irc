@@ -1,3 +1,7 @@
+// James Nichols, jtn4@pdx.edu, CS494p Internetworking Protocols
+// Fall 2021 Term Project: IRC client
+// lib.rs - Common functions and data types for an IRC Client / Server
+
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(unused_imports)]
@@ -57,8 +61,8 @@ pub enum IrcKind {
     NO_MATCH_IRC_KIND,
 }
 
+//Enum of error code types sent between server and client
 #[allow(non_camel_case_types)]
-//#[allow(dead_code)]
 #[derive(Copy, Clone, FromPrimitive, PartialEq, Debug)]
 #[repr(u8)]
 pub enum IrcErrCode {
@@ -76,8 +80,8 @@ pub enum IrcErrCode {
     NO_MATCH_IRC_ERR,
 }
 
-//Internal Rust errors, NOT necessarily equivalent to the IRC_ERR_* values contained in an
-//irc_packet_error message sent between client and server (aka not ErrorPackets).
+//Internal client and server errors, NOT necessarily equivalent to the IRC_ERR_* values contained
+//in an irc_packet_error message sent between client and server (these are not ErrorPackets).
 #[derive(Error, Debug)]
 pub enum IrcError {
     //IRC Custom errors
@@ -124,6 +128,7 @@ pub enum IrcError {
     JoinErr(tokio::task::JoinError),
 
     //TODO: Learn how to combine the SendError types using Generics.
+    
     //Per suggestion by Clippy, boxed the internal error for this
     //variant as the SendError for SyncSendPack is much larger than
     //the rest.
@@ -338,6 +343,7 @@ pub fn string_from_slice(source: &[u8]) -> Result<String> {
     Ok(new_string)
 }
 
+//All IRC packet types must implement the as_ and from_bytes methods
 pub trait IrcPacket {
     fn as_bytes(&self) -> BytesMut;
 
@@ -353,16 +359,16 @@ pub trait IrcPacket {
 //Rust's requirements for moving data between threads require said data to implement
 //both SYNC and SEND traits. All of the concrete implementations of my IrcPacket trait
 //ARE SYNC and SEND, however I haven't found a way to mark a *trait* as SYNC/SEND...
-//Which is reasonable as we have no gaurantees that some other user wouldn't make their
+//Which is reasonable as we have no guarantees that some other user wouldn't make their
 //own concrete implementation of IrcPacket that was NOT Sync and Send.
 //
-//This means that if I cannot stuff an 'IrcPacket' through an MPSC channel. I can instead
+//This means that I cannot stuff an 'IrcPacket' through an MPSC channel. I can instead
 //either set the channel up for a single concrete packet type or some other concrete object
 //type, such as this SyncSendPack struct.
 //
-//This ugly struct simply wraps all the potential concrete implementations of IrcPacket into
-//a single struct, which itself is SYNC/SEND and thus can between tasks/threads via tokio or std
-//channels.
+//This ugly struct simply wraps all the concrete implementations of IrcPacket we may use into
+//a single struct, which itself is SYNC/SEND and thus can be passed between tasks/threads
+//via tokio or std channels.
 #[derive(Debug)]
 pub struct SyncSendPack {
     pub contained_kind: IrcKind,
@@ -1776,6 +1782,9 @@ impl IrcPacket for DirectMessagePacket {
 // FILE TRANSFER HANDSHAKE PACKETS
 ///////////////////////////////////////////////
 
+//The Offer, Accept and Reject packet types all share common contents.
+//Rather than copy/paste through each of them, define a common container each of these packet types
+//can be wrapped around.
 #[derive(Clone, Debug)]
 pub struct TransferCore {
     pub recipient: String,
@@ -1898,6 +1907,9 @@ pub trait TransferCoreRead {
     fn take_core(self) -> TransferCore;
 }
 
+//The Duplicate macro will generate multiple copies of the tagged impl block, each with a different
+//keyword replacement from this list, at compile time. Allowing us to avoid manually copy / pasting
+//this block of code. Wish I had found this sooner.
 #[duplicate(
     transfer_type;
     [OfferFilePacket];
@@ -2220,6 +2232,7 @@ impl IrcPacket for ServerDepartsPacket {
     }
 }
 
+//Import a suite of unit tests from another file.
 #[cfg(test)]
 #[path = "./lib/test.rs"]
 mod irclib; //Names the block of tests we import. The *name* of this library is set in Cargo.toml

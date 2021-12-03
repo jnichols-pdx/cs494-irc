@@ -1,3 +1,7 @@
+// James Nichols, jtn4@pdx.edu, CS494p Internetworking Protocols
+// Fall 2021 Term Project: IRC client
+// serv_main.rs - Main file implementing an IRC server
+
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(unused_imports)]
@@ -20,9 +24,12 @@ use std::sync::{Arc, RwLock};
 #[tokio::main]
 async fn main() -> Result<'static, ()> {
     println!("Hello, world! [server]");
+
+    //Flag shared across threads to trigger server shutdown
     let running = Arc::new(AtomicBool::new(true));
     let r1 = running.clone();
     let r2 = running.clone();
+    //Handler for gracefully shutting down the IRC client if the user presses ctrl-c
     ctrlc::set_handler(move || {
         r1.store(false, Ordering::SeqCst);
     })
@@ -30,24 +37,23 @@ async fn main() -> Result<'static, ()> {
 
     let listener = TcpListener::bind("0.0.0.0:17734").await?;
 
+    //Records of what rooms and users are active on the server, shared between threads and
+    //protected by a read/write lock mutex.
     let master_rooms = Arc::new(RwLock::new(HashMap::new())); //<String, RoomHandle>
     let master_users = Arc::new(RwLock::new(HashMap::new())); //<String, ClientHandle>
 
     let mrc = master_rooms.clone();
     let muc = master_users.clone();
 
-    //let offline_message;
-    //blocks until one of the tasks listed returns
+    //Start threads for handling new connections and monitoring for shutdown signal
+    //Blocks until one or the other thread stops and returns a value.
     tokio::select! {
-        //out = listener_task => {},//offline_message = format!("Response: {:?}",out?);},
-        //_ = stop_task => {},//offline_message = "User asked to quit.".into();},
         out = new_connections(listener, mrc, muc) => {},
         _ = shutdown_monitor(r2) => {},
     }
 
-    let final_users = master_users.write().unwrap(); //grab exclusive access to user to say our goodbyes.
-
-    //println!("about to exit");
+    //Attempt to send a last goodbye message to clients before we shut down.
+    let final_users = master_users.write().unwrap(); //grab exclusive access to user list to say our goodbyes.
     for (_, client_handle) in final_users.iter() {
         let outgoing = ServerDepartsPacket::new(&"Server going down for maintenance.".to_string())
             .expect("Server closing anyway.");
@@ -60,6 +66,8 @@ async fn main() -> Result<'static, ()> {
     Ok(())
 }
 
+//Thread monitoring a shared shutdown flag watching for ctrl-c inputs. Closes the client program
+//when triggered.
 async fn shutdown_monitor(running: Arc<AtomicBool>) {
     let mut wait_period = time::interval(Duration::from_millis(100));
     loop {
@@ -73,6 +81,7 @@ async fn shutdown_monitor(running: Arc<AtomicBool>) {
     }
 }
 
+//Thread responding to new client connections. Will spawn a new thread for each client.
 async fn new_connections<'a>(
     listener: TcpListener,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
@@ -150,6 +159,8 @@ async fn new_connections<'a>(
     }
 }
 
+//Entry point for thread managing a connected user, spawns additional threads to manage reading
+//from, writing to, sending keepalive packets to, and watching for keepalive packets from a client.
 async fn client_lifecycle<'a>(
     mut socket: TcpStream,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
@@ -213,6 +224,7 @@ async fn client_lifecycle<'a>(
     Ok(())
 }
 
+//Keepalive thread, sends heartbeat packets to a client at regular intervals
 async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let mut wait_period = time::interval(Duration::from_millis(5000));
     loop {
@@ -223,6 +235,8 @@ async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<
     }
 }
 
+//Watchdog thread monitoring for heartbeat messages from a client. Will trigger disconnecting and
+//cleaning up after a client if no keepalive heartbeats are received for a period of time.
 async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
     let mut seconds_since_heartbeat = 0u8;
     let mut wait_period = time::interval(Duration::from_millis(1000));
@@ -242,6 +256,7 @@ async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
     Ok(())
 }
 
+//Thread that manages sending packets to a client from an outbound packet queue.
 async fn writer<'a>(
     mut con: tokio::net::tcp::OwnedWriteHalf,
     mut rx_packets_to_send: mpsc::Receiver<SyncSendPack>,
@@ -324,6 +339,8 @@ async fn writer<'a>(
     Ok(())
 }
 
+//Thread that listens for incoming packets from a client, passes most packet types to another
+//thread for processing.
 async fn reader<'a>(
     mut con: tokio::net::tcp::OwnedReadHalf,
     tx_to_responder: mpsc::Sender<SyncSendPack>,
@@ -460,6 +477,7 @@ async fn reader<'a>(
     Ok(ret_string)
 }
 
+//Thread handling behavior in response to incoming packet from a client.
 async fn responder<'a>(
     client_name: String,
     mut packet_source: mpsc::Receiver<SyncSendPack>,
@@ -640,6 +658,8 @@ async fn responder<'a>(
     Ok(ret_string)
 }
 
+//Adds a room to the list of rooms shared across threads, spawns a management thread to handle the
+//room's behavior.
 async fn make_room<'a>(
     room_name: String,
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
@@ -704,6 +724,9 @@ async fn make_room<'a>(
     Ok(new_room_handle)
 }
 
+//Entry point for a thread handling the behavior of a chat room. Spawns additional threads for
+//tracking users entering the room, leaving the room and sending messages to users present in the
+//room.
 async fn room_lifecycle<'a>(
     room_name: String,
     mut join_source: mpsc::Receiver<ClientHandle>,
@@ -767,6 +790,7 @@ async fn room_lifecycle<'a>(
     Ok(())
 }
 
+//Thread for responding to users entering a chat room
 async fn users_entering_room<'a>(
     room_name: String,
     mut join_source: mpsc::Receiver<ClientHandle>,
@@ -805,6 +829,7 @@ async fn users_entering_room<'a>(
     Ok("no more users may enter".to_string())
 }
 
+//Thread for responding to users leaving a chat room
 async fn users_leaving_room<'a>(
     room_name: String,
     mut leave_source: mpsc::Receiver<String>,
@@ -851,6 +876,7 @@ async fn users_leaving_room<'a>(
     Ok("I'm not trapped in here with you... you're trapped in here with me!".to_string())
 }
 
+//Thread for handling messages sent to a room's users
 async fn messages_posting_to_room<'a>(
     room_name: String,
     mut post_source: mpsc::Receiver<SyncSendPack>,

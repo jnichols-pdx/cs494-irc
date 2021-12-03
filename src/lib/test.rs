@@ -1,3 +1,7 @@
+// James Nichols, jtn4@pdx.edu, CS494p Internetworking Protocols
+// Fall 2021 Term Project: IRC client
+// test.rs - Unit tests for library functions and data types found in lib.rs
+
 use super::*;
 
 #[test]

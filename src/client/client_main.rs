@@ -1,3 +1,8 @@
+// James Nichols, jtn4@pdx.edu, CS494p Internetworking Protocols
+// Fall 2021 Term Project: IRC client
+// client_main.rs - Main file implementing an IRC client
+
+
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 #![allow(unused_imports)]
@@ -19,7 +24,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use cursive::Cursive;
-//use cursive::CursiveRunnable;
 use crate::uilib::*;
 use cursive::view::*;
 use cursive::views::TextView;
@@ -29,31 +33,42 @@ use std::thread;
 
 #[tokio::main]
 async fn main() -> Result<'static, ()> {
+    //Boolean flag shared by watchdog and UI threads to trigger program to shut down.
     let running = Arc::new(AtomicBool::new(true));
     let r1 = running.clone();
     let r2 = running.clone();
     let r3 = running.clone();
+
+    //Handler for gracefully shutting down the IRC client if the user presses ctrl-c
     ctrlc::set_handler(move || {
         r1.store(false, Ordering::SeqCst);
     })
     .expect("Error setting Ctrl-C handler");
 
+    //Boolean flag used by UI thread to indicate if it is still running.
+    //The cursive UI package captures ctrl-c and will exit its run handler, we don't want to try to
+    //use the UI to put up a 'this is why we are disconnected' notice if the UI itself is
+    //triggering our shutdown.
     let ui_active = Arc::new(AtomicBool::new(true));
     let u1 = ui_active.clone();
 
+    //Boolean flag used by watchdog and incoming packet threads to communicate when a heartbeat
+    //packet has been received from the server.
     let found_pulse = Arc::new(AtomicBool::new(true));
     let fp = found_pulse.clone();
 
+    //Extremely minimal console parameter handling.
+    //TODO: gracefully handle not receiving username on commandline.
     let mut arg_list = env::args().skip(1);
     let my_name = arg_list.next().unwrap();
-
     let host;
     if arg_list.len() > 0 {
         host = arg_list.next().unwrap();
     } else {
-        host = "192.168.2.5:17734".to_string();
+        host = "127.0.0.1:17734".to_string();
     }
 
+    //Connect to server and tell it our user name.
     let mut con = TcpStream::connect(host).await?;
     let my_ident = NewClientPacket::new(&my_name)?;
     con.write(&my_ident.as_bytes()).await?;
@@ -78,7 +93,7 @@ async fn main() -> Result<'static, ()> {
     let ui_thread = thread::spawn(move || ui_kickstart(r3, tx_cb_to_main, tx2, u1));
 
     //Retrieve a handle to the UI's callback endpoint, so we may tell it to react to incoming
-    //packets.
+    //packets, consumes the Oneshot channel.
     let cb_handle;
     match rx_cb_from_kickstart.await {
         Ok(v) => cb_handle = v,
@@ -101,6 +116,7 @@ async fn main() -> Result<'static, ()> {
     let watchdog_task = tokio::spawn(pulse_monitor(found_pulse));
     let stop_task = tokio::spawn(shutdown_monitor(r2, tx6));
 
+    //Request the server send us a list of currently available rooms.
     let first_room_listing = ListRoomsPacket::new()?;
     tx_to_server.send(first_room_listing.into()).await?;
 
@@ -136,7 +152,7 @@ async fn main() -> Result<'static, ()> {
         }));
 
         if could_prompt.is_ok() {
-                //UI was still responsive - wait for the user to acknowledge the disconnect dialog prompt.
+                //UI was still responsive - wait for the user to acknowledge the disconnect dialog prompt before shutting down.
                 let mut wait_period = time::interval(Duration::from_millis(100));
                 loop {
                     wait_period.tick().await;
@@ -150,6 +166,7 @@ async fn main() -> Result<'static, ()> {
     Ok(())
 }
 
+//UI Thread entry point, sets up the core UI elements and waits for the UI runtime to exit.
 fn ui_kickstart(
     running: Arc<AtomicBool>,
     tx_return_cb_handle: oneshot::Sender<cursive::CbSink>,
@@ -191,6 +208,7 @@ fn ui_kickstart(
     running.store(false, Ordering::SeqCst);
 }
 
+//Keepalive thread, sends heartbeat packets to the server at regular intervals
 async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let mut wait_period = time::interval(Duration::from_millis(5000));
     loop {
@@ -201,6 +219,7 @@ async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<
     }
 }
 
+//Thread handling UI logic for incoming packets
 async fn responder(
     cb: cursive::CbSink,
     mut rx_from_main: mpsc::Receiver<SyncSendPack>,
@@ -321,6 +340,8 @@ async fn responder(
     }
 }
 
+//Watchdog thread monitoring for heartbeat messages from the server. Will trigger a client
+//shutdown if no keepalive heartbeats are received for a period of time.
 async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
     let mut seconds_since_heartbeat = 0u8;
     let mut wait_period = time::interval(Duration::from_millis(1000));
@@ -340,6 +361,8 @@ async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
     Ok(())
 }
 
+//Thread monitoring a shared shutdown flag that can be triggered by the UI thread or a handler
+//watching for ctrl-c inputs. Closes the client program when triggered.
 async fn shutdown_monitor<'a>(
     running: Arc<AtomicBool>,
     tx_packet_out: mpsc::Sender<irclib::SyncSendPack>,
@@ -358,6 +381,7 @@ async fn shutdown_monitor<'a>(
     Ok(())
 }
 
+//Thread handling sending outgoing packets to the IRC server.
 async fn writer<'a>(
     mut con: tokio::net::tcp::OwnedWriteHalf,
     mut rx_packets_to_send: mpsc::Receiver<SyncSendPack>,
@@ -434,6 +458,8 @@ async fn writer<'a>(
     Ok(())
 }
 
+//Thread handling incoming packets from IRC server. Handles a few specific packet types directly,
+//otherwise passes them to the UI incoming packet logic thread.
 async fn reader<'a>(
     mut con: tokio::net::tcp::OwnedReadHalf,
     tx_to_responder: mpsc::Sender<SyncSendPack>,
@@ -563,5 +589,7 @@ async fn reader<'a>(
     Ok(ret_string)
 }
 
+//Functions for handling UI driven events are defined in a separate file, include them here as part
+//of the client program
 #[path = "curs.rs"]
-mod uilib;  //Include the UI specific code kept in a separate file.
+mod uilib;
