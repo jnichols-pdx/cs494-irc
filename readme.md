@@ -2,7 +2,7 @@
 
 Yet Another Rust IRC Client - A client and server implementation of a custom internet relay chat protocol.
 This client and server are _not_ compatible with RFC 1459. The chat client uses the Cursive library to
-offer a basic terminal-UI.
+offer a basic terminal user interface (TUI).
 
 ## Author and Assignment
 
@@ -18,7 +18,7 @@ Internet Relay Chat allows users to connect chat clients to a central chat serve
 The server hosts any number of chat rooms, where users may share text messages visible
 by other users in the same chat room. This project implements a custom network protocol
 for information sent between the chat client and server. This is _not_ the internet
-standard IRC protocol as defiend in RFC 1459. See the file RFC_DRAFT_JTN4.pdf for
+standard IRC protocol as defined in RFC 1459. See the file RFC_DRAFT_JTN4.pdf for
 protocol details.
 
 ## Usage - server
@@ -32,19 +32,28 @@ The server may be stopped by pressing ctrl-c on the commandline.
 
 The client may be started via cargo with the command `cargo run --bin client <username> [server]`
 By default the client attempts to connect to localhost on port 17734.
-<username> is mandatory and sets your IRC username / handle which is visible to other chat users.
+
+`<username>` is mandatory and sets your IRC username / handle which is visible to other chat users.
+
 Usernames may not contain spaces and are limited to the lesser of 32 unicode characters or 64 bytes.
+
 The server will reject a client connection if the chosen username is already in use.
-[server] takes the form <ip-address>:<port#>, while the client may specify a custom port, the server
-is currently hard coded to listen on port 17734.
+
+[server] takes the form `ip-address:port` and specifies the address of the server to connect to.
+While the client may specify a custom port, the server is currently hard coded to only listen on port 17734.
+
 The client may be closed by pressing either ctrl-c or ctrl-q.
 
 ### Navigation
 
 The Cursive UI used by the client allows for navigating by either mouse or arrow keys.
+
 You may click on buttons, names of rooms in the room list, tabs, or the input lines directly.
+
 You may move the highlight to buttons, names of rooms in the room list, or tabs and press the Enter key
+
 to make selections. The enter key also enters commands or sends messages to the current chat tab.
+
 Tabs may also be switched by pressing ctrl + Right Arrow or ctrl + Left Arrow
 
 ### Text Commands
