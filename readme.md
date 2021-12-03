@@ -76,7 +76,7 @@ of them as commands:
 There is a bug in either the library crate which provides Tabbed views in Cursive, or how this client 
 interacts with them. If one switches to a chat tab that is NOT at the right end of the list with the 
 ctrl + arrow key shortcuts, /leaves that chat window, and then clicks on one of the remaining tabs the
-UI thread may crash. To avoid this error either one should first switch to a tab they wish to close by
-clicking on it's name, or by highlighting the tab name with the arrow keys and pressing Enter. If you
-are currently on the tab for a conversation you wish to /leave this may mean changing to another tab 
-and then back before leaving.
+UI thread may crash. To avoid this error one should first switch to a tab they wish to close either by
+clicking on its name, or by highlighting its tab with the arrow keys and pressing Enter. If you are
+currently on the tab for a conversation you wish to /leave this may mean require switching to it again
+just before leaving the channel.
