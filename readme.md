@@ -18,7 +18,7 @@ Internet Relay Chat allows users to connect chat clients to a central chat serve
 The server hosts any number of chat rooms, where users may share text messages visible
 by other users in the same chat room. This project implements a custom network protocol
 for information sent between the chat client and server. This is _not_ the internet
-standard IRC protocol as defined in RFC 1459. See the file RFC_DRAFT_JTN4.pdf for
+standard IRC protocol as defined in RFC 1459. See the file CS494_IRC_RFC_JTN4.pdf for
 protocol details.
 
 ## Compiling
