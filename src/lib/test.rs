@@ -709,7 +709,7 @@ fn room_listing_packet_as_bytes() {
     rooms_vec.push("first".to_string());
     rooms_vec.push("second".to_string());
     rooms_vec.push("third".to_string());
-    let mut rlpfv = RoomListingPacket::from_vec(&rooms_vec).unwrap();
+    let rlpfv = RoomListingPacket::from_vec(&rooms_vec).unwrap();
 
     assert_eq!(rlpfv.as_bytes(), Bytes::from_static(b"\x07\0\0\x01\x00\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
@@ -806,7 +806,7 @@ fn user_listing_packet_from_bytes() {
     bytes_lenf.put_bytes(b'\0', remain);
     bytes_lenf.put_slice("Franklin".as_bytes());
     let remain = 64 - "Franklin".len();
-    bytes_lenf.put_bytes(b'\0', 64);
+    bytes_lenf.put_bytes(b'\0', remain);
 
     let ulp_bad_lenf = UserListingPacket::from_bytes(&bytes_lenf);
     assert!(ulp_bad_lenf.is_err());
@@ -828,7 +828,7 @@ fn user_listing_packet_from_bytes() {
     bytes_good3.put_bytes(b'\0', remain);
     bytes_mismatch.put_slice("Franklin".as_bytes());
     let remain = 64 - "Franklin".len();
-    bytes_mismatch.put_bytes(b'\0', 64);
+    bytes_mismatch.put_bytes(b'\0', remain);
 
     let ulp_bad_mismatch = UserListingPacket::from_bytes(&bytes_mismatch);
     assert!(ulp_bad_mismatch.is_err());
@@ -868,7 +868,7 @@ fn user_listing_packet_as_bytes() {
     users_vec.push("first".to_string());
     users_vec.push("second".to_string());
     users_vec.push("third".to_string());
-    let mut ulpfv = UserListingPacket::from_room_and_vec(&"r/IRC".to_string(), &users_vec).unwrap();
+    let ulpfv = UserListingPacket::from_room_and_vec(&"r/IRC".to_string(), &users_vec).unwrap();
 
     assert_eq!(ulpfv.as_bytes(), Bytes::from_static(b"\x08\0\0\x01\x00r/IRC\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0first\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0second\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0third\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"));
 }
@@ -918,7 +918,7 @@ fn query_user_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("Franklin".as_bytes());
     let remain = 64 - "Franklin".len();
-    bytes_lenf.put_bytes(b'\0', 64);
+    bytes_lenf.put_bytes(b'\0', remain);
     bytes_lenf.put_u8(0);
 
     let qup_bad_lenf = QueryUserPacket::from_bytes(&bytes_lenf);
@@ -938,7 +938,7 @@ fn query_user_packet_from_bytes() {
     bytes_mismatch.put_u32(65);
     bytes_mismatch.put_slice("Franklin".as_bytes());
     let remain = 64 - "Franklin".len();
-    bytes_mismatch.put_bytes(b'\0', 64);
+    bytes_mismatch.put_bytes(b'\0', remain);
     bytes_mismatch.put_u8(2);
 
     let qup_bad_mismatch = QueryUserPacket::from_bytes(&bytes_mismatch);
@@ -1054,7 +1054,7 @@ fn send_message_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("News&Rumours".as_bytes());
     let remain = 64 - "News&Rumours".len();
-    bytes_lenf.put_bytes(b'\0', 64);
+    bytes_lenf.put_bytes(b'\0', remain);
     bytes_lenf.put_slice(
         b"Our records show your car's warranty is almost expired! If you'd like to...\0",
     );
@@ -1076,7 +1076,7 @@ fn send_message_packet_from_bytes() {
     bytes_mismatch.put_u32(68);
     bytes_mismatch.put_slice("Cars".as_bytes());
     let remain = 64 - "Cars".len();
-    bytes_mismatch.put_bytes(b'\0', 64);
+    bytes_mismatch.put_bytes(b'\0', remain);
     bytes_mismatch.put_slice("yo!\0".as_bytes());
 
     let smp_bad_mismatch = SendMessagePacket::from_bytes(&bytes_mismatch);
@@ -1102,7 +1102,7 @@ fn send_message() {
     assert_eq!(smp.message, "This should be good.\0");
     assert_eq!(smp.get_message(), "This should be good.");
 
-    let mut smpwrap =
+    let smpwrap =
         SendMessagePacket::new(&"RTSGaming".to_string(), &"AHH! You scared me!".to_string());
     assert!(smpwrap.is_ok());
     let smp = smpwrap.unwrap();
@@ -1110,7 +1110,7 @@ fn send_message() {
     assert_eq!(smp.message, "AHH! You scared me!\0");
     assert_eq!(smp.get_message(), "AHH! You scared me!");
 
-    let mut smp_fail = SendMessagePacket::new(
+    let smp_fail = SendMessagePacket::new(
         &"RTSGaming".to_string(),
         &"AHH! \0You scared me!".to_string(),
     );
@@ -1119,7 +1119,7 @@ fn send_message() {
 
 #[test]
 fn send_message_packet_as_bytes() {
-    let mut smp = SendMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
+    let smp = SendMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
     assert_eq!(smp.as_bytes(), Bytes::from_static(b"\x0A\0\0\0\x46Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
 }
 
@@ -1182,19 +1182,19 @@ fn broadcast_message() {
     assert_eq!(bmp.message, "This should be good.\0");
     assert_eq!(bmp.get_message(), "This should be good.");
 
-    let mut bmpwrap = BroadcastMessagePacket::new(&"AHH! You scared me!".to_string());
+    let bmpwrap = BroadcastMessagePacket::new(&"AHH! You scared me!".to_string());
     assert!(bmpwrap.is_ok());
     let bmp = bmpwrap.unwrap();
     assert_eq!(bmp.message, "AHH! You scared me!\0");
     assert_eq!(bmp.get_message(), "AHH! You scared me!");
 
-    let mut bmp_fail = BroadcastMessagePacket::new(&"AHH! \0You scared me!".to_string());
+    let bmp_fail = BroadcastMessagePacket::new(&"AHH! \0You scared me!".to_string());
     assert!(bmp_fail.is_err());
 }
 
 #[test]
 fn broadcast_message_packet_as_bytes() {
-    let mut bmp = BroadcastMessagePacket::new(&"Hello".to_string()).unwrap();
+    let bmp = BroadcastMessagePacket::new(&"Hello".to_string()).unwrap();
     assert_eq!(bmp.as_bytes(), Bytes::from_static(b"\x0B\0\0\0\x06Hello\0"));
 }
 
@@ -1286,10 +1286,10 @@ fn post_message_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("News&Rumours".as_bytes());
     let remain = 64 - "News&Rumours".len();
-    bytes_lenf.put_bytes(b'\0', 64);
+    bytes_lenf.put_bytes(b'\0', remain);
     bytes_lenf.put_slice("SpamCaller".as_bytes());
     let remain = 64 - "SpamCaller".len();
-    bytes_lenf.put_bytes(b'\0', 64);
+    bytes_lenf.put_bytes(b'\0', remain);
     bytes_lenf.put_slice(
         b"Our records show your car's warranty is almost expired! If you'd like to...\0",
     );
@@ -1311,10 +1311,10 @@ fn post_message_packet_from_bytes() {
     bytes_mismatch.put_u32(132);
     bytes_mismatch.put_slice("Cars".as_bytes());
     let remain = 64 - "Cars".len();
-    bytes_mismatch.put_bytes(b'\0', 64);
+    bytes_mismatch.put_bytes(b'\0', remain);
     bytes_mismatch.put_slice("DudeBro".as_bytes());
     let remain = 64 - "DudeBro".len();
-    bytes_mismatch.put_bytes(b'\0', 64);
+    bytes_mismatch.put_bytes(b'\0', remain);
     bytes_mismatch.put_slice("yo!\0".as_bytes());
 
     let pmp_bad_mismatch = PostMessagePacket::from_bytes(&bytes_mismatch);
@@ -1343,7 +1343,7 @@ fn post_message() {
     assert_eq!(pmp.get_message(), "This should be good.");
 
     //Without pre-appending a null to the message
-    let mut pmpwrap = PostMessagePacket::new(
+    let pmpwrap = PostMessagePacket::new(
         &"RTSGaming".to_string(),
         &"SCV429".to_string(),
         &"AHH! You scared me!".to_string(),
@@ -1355,7 +1355,7 @@ fn post_message() {
     assert_eq!(pmp.message, "AHH! You scared me!\0");
     assert_eq!(pmp.get_message(), "AHH! You scared me!");
 
-    let mut pmp_fail = PostMessagePacket::new(
+    let pmp_fail = PostMessagePacket::new(
         &"RTSGaming".to_string(),
         &"SCV429".to_string(),
         &"AHH! \0You scared me!".to_string(),
@@ -1365,7 +1365,7 @@ fn post_message() {
 
 #[test]
 fn post_message_packet_as_bytes() {
-    let mut pmp = PostMessagePacket::new(
+    let pmp = PostMessagePacket::new(
         &"Channel42".to_string(),
         &"New_User".to_string(),
         &"Hello".to_string(),
@@ -1450,7 +1450,7 @@ fn direct_message_packet_from_bytes() {
     bytes_lenf.put_u32(30); //wrong length field value
     bytes_lenf.put_slice("News&Rumours".as_bytes());
     let remain = 64 - "News&Rumours".len();
-    bytes_lenf.put_bytes(b'\0', 64);
+    bytes_lenf.put_bytes(b'\0', remain);
     bytes_lenf.put_slice(
         b"Our records show your car's warranty is almost expired! If you'd like to...\0",
     );
@@ -1472,7 +1472,7 @@ fn direct_message_packet_from_bytes() {
     bytes_mismatch.put_u32(68);
     bytes_mismatch.put_slice("Cars".as_bytes());
     let remain = 64 - "Cars".len();
-    bytes_mismatch.put_bytes(b'\0', 64);
+    bytes_mismatch.put_bytes(b'\0', remain);
     bytes_mismatch.put_slice("yo!\0".as_bytes());
 
     let dmp_bad_mismatch = DirectMessagePacket::from_bytes(&bytes_mismatch);
@@ -1499,7 +1499,7 @@ fn direct_message() {
     assert_eq!(dmp.message, "This should be good.\0");
     assert_eq!(dmp.get_message(), "This should be good.");
 
-    let mut dmpwrap =
+    let dmpwrap =
         DirectMessagePacket::new(&"RTSGaming".to_string(), &"AHH! You scared me!".to_string());
     assert!(dmpwrap.is_ok());
     let dmp = dmpwrap.unwrap();
@@ -1507,7 +1507,7 @@ fn direct_message() {
     assert_eq!(dmp.message, "AHH! You scared me!\0");
     assert_eq!(dmp.get_message(), "AHH! You scared me!");
 
-    let mut dmp_fail = DirectMessagePacket::new(
+    let dmp_fail = DirectMessagePacket::new(
         &"RTSGaming".to_string(),
         &"AHH! \0You scared me!".to_string(),
     );
@@ -1516,7 +1516,7 @@ fn direct_message() {
 
 #[test]
 fn direct_message_packet_as_bytes() {
-    let mut dmp = DirectMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
+    let dmp = DirectMessagePacket::new(&"Channel42".to_string(), &"Hello".to_string()).unwrap();
     assert_eq!(dmp.as_bytes(), Bytes::from_static(b"\x0D\0\0\0\x46Channel42\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0Hello\0"));
 }
 
@@ -1642,7 +1642,7 @@ fn offer_file() {
     assert_eq!(ofp.get_size(), 512);
     assert_eq!(ofp.get_file_name(), "Example.txt");
 
-    let mut ofp_fail = OfferFilePacket::new(
+    let ofp_fail = OfferFilePacket::new(
         &"Frank".to_string(),
         &"Bob".to_string(),
         512,
@@ -1653,7 +1653,7 @@ fn offer_file() {
 
 #[test]
 fn offer_file_packet_as_bytes() {
-    let mut ofp = OfferFilePacket::new(
+    let ofp = OfferFilePacket::new(
         &"Frank".to_string(),
         &"Bob".to_string(),
         512,
@@ -1787,7 +1787,7 @@ fn accept_file() {
     assert_eq!(afp.get_size(), 512);
     assert_eq!(afp.get_file_name(), "Example.txt");
 
-    let mut afp_fail = AcceptFilePacket::new(
+    let afp_fail = AcceptFilePacket::new(
         &"Frank".to_string(),
         &"Bob".to_string(),
         11,
@@ -1799,7 +1799,7 @@ fn accept_file() {
 
 #[test]
 fn accept_file_packet_as_bytes() {
-    let mut afp = AcceptFilePacket::new(
+    let afp = AcceptFilePacket::new(
         &"Frank".to_string(),
         &"Bob".to_string(),
         11,
@@ -1937,7 +1937,7 @@ fn reject_file() {
     assert_eq!(rfp.get_size(), 512);
     assert_eq!(rfp.get_file_name(), "Example.txt");
 
-    let mut rfp_fail = RejectFilePacket::new(
+    let rfp_fail = RejectFilePacket::new(
         &"Frank".to_string(),
         &"Bob".to_string(),
         11,
@@ -1949,7 +1949,7 @@ fn reject_file() {
 
 #[test]
 fn reject_file_packet_as_bytes() {
-    let mut rfp = RejectFilePacket::new(
+    let rfp = RejectFilePacket::new(
         &"Frank".to_string(),
         &"Bob".to_string(),
         11,
@@ -2036,7 +2036,7 @@ fn file_transfer_packet_from_bytes() {
 
 #[test]
 fn file_transfer_packet_as_bytes() {
-    let mut ftp = FileTransferPacket::new(
+    let ftp = FileTransferPacket::new(
         11,
         false,
         Bytes::from_static(b"asdbvadfavasdfasdfijasdifnmalsdikf"),
@@ -2047,7 +2047,7 @@ fn file_transfer_packet_as_bytes() {
         Bytes::from_static(b"\x11\0\0\0\x25\x00\x0B\x00asdbvadfavasdfasdfijasdifnmalsdikf")
     );
 
-    let mut ftp = FileTransferPacket::new(
+    let ftp = FileTransferPacket::new(
         14,
         true,
         Bytes::from_static(b"And thus spoke micheal: the end.\""),
@@ -2120,19 +2120,19 @@ fn client_departs() {
     assert_eq!(cdp.message, "This was fun.\0");
     assert_eq!(cdp.get_message(), "This was fun.");
 
-    let mut cdpwrap = ClientDepartsPacket::new(&"Hasta la vista baybee!".to_string());
+    let cdpwrap = ClientDepartsPacket::new(&"Hasta la vista baybee!".to_string());
     assert!(cdpwrap.is_ok());
     let cdp = cdpwrap.unwrap();
     assert_eq!(cdp.message, "Hasta la vista baybee!\0");
     assert_eq!(cdp.get_message(), "Hasta la vista baybee!");
 
-    let mut cdp_fail = ClientDepartsPacket::new(&"AHH! \0You scared me!".to_string());
+    let cdp_fail = ClientDepartsPacket::new(&"AHH! \0You scared me!".to_string());
     assert!(cdp_fail.is_err());
 }
 
 #[test]
 fn client_departs_packet_as_bytes() {
-    let mut cdp = ClientDepartsPacket::new(&"Parting is such sweet sorrow".to_string()).unwrap();
+    let cdp = ClientDepartsPacket::new(&"Parting is such sweet sorrow".to_string()).unwrap();
     assert_eq!(
         cdp.as_bytes(),
         Bytes::from_static(b"\x12\0\0\0\x1DParting is such sweet sorrow\0")
@@ -2200,19 +2200,19 @@ fn server_departs() {
     assert_eq!(sdp.message, "This was fun.\0");
     assert_eq!(sdp.get_message(), "This was fun.");
 
-    let mut sdpwrap = ServerDepartsPacket::new(&"Hasta la vista baybee!".to_string());
+    let sdpwrap = ServerDepartsPacket::new(&"Hasta la vista baybee!".to_string());
     assert!(sdpwrap.is_ok());
     let sdp = sdpwrap.unwrap();
     assert_eq!(sdp.message, "Hasta la vista baybee!\0");
     assert_eq!(sdp.get_message(), "Hasta la vista baybee!");
 
-    let mut sdp_fail = ServerDepartsPacket::new(&"AHH! \0You scared me!".to_string());
+    let sdp_fail = ServerDepartsPacket::new(&"AHH! \0You scared me!".to_string());
     assert!(sdp_fail.is_err());
 }
 
 #[test]
 fn server_departs_packet_as_bytes() {
-    let mut sdp = ServerDepartsPacket::new(
+    let sdp = ServerDepartsPacket::new(
         &"Server is going down because the admin can't stand any of you any longer!".to_string(),
     )
     .unwrap();

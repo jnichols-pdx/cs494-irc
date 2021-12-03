@@ -2,20 +2,19 @@
 // Fall 2021 Term Project: IRC client
 // serv_main.rs - Main file implementing an IRC server
 
-#![allow(unused_variables)]
-#![allow(unused_mut)]
-#![allow(unused_imports)]
+//#![allow(unused_variables)]
+//#![allow(unused_mut)]
+//#![allow(unused_imports)]
 
 use irclib::*;
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+//use bytes::{Buf, BufMut, Bytes, BytesMut};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc};
 use tokio::time::{self, sleep, Duration};
 
 use std::collections::HashMap;
-use std::io::ErrorKind;
 use std::io::{stderr, Write};
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,7 +47,7 @@ async fn main() -> Result<'static, ()> {
     //Start threads for handling new connections and monitoring for shutdown signal
     //Blocks until one or the other thread stops and returns a value.
     tokio::select! {
-        out = new_connections(listener, mrc, muc) => {},
+        _ = new_connections(listener, mrc, muc) => {},
         _ = shutdown_monitor(r2) => {},
     }
 
@@ -91,7 +90,7 @@ async fn new_connections<'a>(
         let (mut socket, _) = listener.accept().await?;
 
         let mut peeker = [0; 5];
-        let mut bytes_peeked;
+        let bytes_peeked;
         bytes_peeked = socket.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
@@ -104,9 +103,9 @@ async fn new_connections<'a>(
                         let new_client = NewClientPacket::from_bytes(&buffer)?;
                         let master_users_copy = master_users.clone();
                         let master_rooms_copy = master_rooms.clone();
-                        let mut should_reject;
+                        let should_reject;
                         {
-                            let mut master_users_ro = master_users.read().unwrap();
+                            let master_users_ro = master_users.read().unwrap();
                             should_reject = master_users_ro.contains_key(&new_client.chat_name);
                         }
                         if should_reject {
@@ -121,7 +120,7 @@ async fn new_connections<'a>(
                             println!("New client connected: '{}'", new_client.chat_name);
                             //Spin up a new user
                             socket.set_nodelay(true).expect("Unable to set delay false");
-                            let (channel_sink, mut channel_source) =
+                            let (channel_sink, channel_source) =
                                 mpsc::channel::<SyncSendPack>(64);
                             //let handle_sink = channel_sink.clone();
 
@@ -162,11 +161,11 @@ async fn new_connections<'a>(
 //Entry point for thread managing a connected user, spawns additional threads to manage reading
 //from, writing to, sending keepalive packets to, and watching for keepalive packets from a client.
 async fn client_lifecycle<'a>(
-    mut socket: TcpStream,
+    socket: TcpStream,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
-    mut our_handle: ClientHandle,
-    mut channel_source: mpsc::Receiver<SyncSendPack>,
+    our_handle: ClientHandle,
+    channel_source: mpsc::Receiver<SyncSendPack>,
 ) -> Result<'a, ()> {
     //Split the TcpStream into reader and writer, pass each to their own asynchronous task
     let (tcp_in, tcp_out) = socket.into_split();
@@ -177,7 +176,7 @@ async fn client_lifecycle<'a>(
     let sink3 = channel_sink.clone();
     let found_pulse = Arc::new(AtomicBool::new(true));
     let fp = found_pulse.clone();
-    let (responder_sink, mut responder_source) = mpsc::channel::<SyncSendPack>(32);
+    let (responder_sink, responder_source) = mpsc::channel::<SyncSendPack>(32);
     let mrc = master_rooms.clone();
     let muc = master_users.clone();
 
@@ -561,7 +560,7 @@ async fn responder<'a>(
             }
             IrcKind::IRC_KIND_QUERY_USER => {
                 let qup = packet.qup.unwrap();
-                let mut theyre_online;
+                let theyre_online;
                 {
                     let master_users_ro;
                     match master_users.read() {
@@ -569,7 +568,7 @@ async fn responder<'a>(
                         Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
                     }
                     match master_users_ro.get(&qup.user_name) {
-                        Some(h) => theyre_online = true,
+                        Some(_) => theyre_online = true,
                         None => theyre_online = false,
                     }
                 }
@@ -665,18 +664,16 @@ async fn make_room<'a>(
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
 ) -> Result<'a, RoomHandle> {
-    let (join_channel_sink, mut join_channel_source) = mpsc::channel::<ClientHandle>(32);
-    let (post_channel_sink, mut post_channel_source) = mpsc::channel::<SyncSendPack>(64);
-    let (leave_channel_sink, mut leave_channel_source) = mpsc::channel::<String>(32);
+    let (join_channel_sink, join_channel_source) = mpsc::channel::<ClientHandle>(32);
+    let (post_channel_sink, post_channel_source) = mpsc::channel::<SyncSendPack>(64);
+    let (leave_channel_sink, leave_channel_source) = mpsc::channel::<String>(32);
     let rn1 = room_name.clone();
-    let p1 = post_channel_sink.clone();
     let u1 = master_users.clone();
     let r1 = master_rooms.clone();
 
     tokio::spawn(room_lifecycle(
         rn1,
         join_channel_source,
-        p1,
         post_channel_source,
         leave_channel_source,
         u1,
@@ -729,10 +726,9 @@ async fn make_room<'a>(
 //room.
 async fn room_lifecycle<'a>(
     room_name: String,
-    mut join_source: mpsc::Receiver<ClientHandle>,
-    mut post_sink: mpsc::Sender<SyncSendPack>,
-    mut post_source: mpsc::Receiver<SyncSendPack>,
-    mut leave_source: mpsc::Receiver<String>,
+    join_source: mpsc::Receiver<ClientHandle>,
+    post_source: mpsc::Receiver<SyncSendPack>,
+    leave_source: mpsc::Receiver<String>,
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
 ) -> Result<'a, ()> {
@@ -742,17 +738,13 @@ async fn room_lifecycle<'a>(
     let u2 = users_in_room.clone();
     let u3 = users_in_room.clone();
 
-    let p1 = post_sink.clone();
-    let p2 = post_sink.clone();
-
     let rn1 = room_name.clone();
     let rn2 = room_name.clone();
-    let rn3 = room_name.clone();
 
     tokio::select! {
-        _ = users_entering_room(rn1, join_source, u1, p1) => {},
-        _ = users_leaving_room(rn2, leave_source, u2, p2) => {},
-        _ = messages_posting_to_room(rn3, post_source, u3) => {},
+        _ = users_entering_room(rn1, join_source, u1) => {},
+        _ = users_leaving_room(rn2, leave_source, u2) => {},
+        _ = messages_posting_to_room(post_source, u3) => {},
     }
 
     println!("Closing room: {}", &room_name);
@@ -795,7 +787,6 @@ async fn users_entering_room<'a>(
     room_name: String,
     mut join_source: mpsc::Receiver<ClientHandle>,
     users_in_room: Arc<RwLock<HashMap<String, ClientHandle>>>,
-    mut post_sink: mpsc::Sender<SyncSendPack>,
 ) -> Result<'a, String> {
     while let Some(entering_user) = join_source.recv().await {
         println!("{} enters {}", entering_user.name, room_name);
@@ -834,7 +825,6 @@ async fn users_leaving_room<'a>(
     room_name: String,
     mut leave_source: mpsc::Receiver<String>,
     users_in_room: Arc<RwLock<HashMap<String, ClientHandle>>>,
-    mut post_sink: mpsc::Sender<SyncSendPack>,
 ) -> Result<'a, String> {
     while let Some(leaving_user) = leave_source.recv().await {
         println!("{} leaves {}", leaving_user, room_name);
@@ -878,14 +868,13 @@ async fn users_leaving_room<'a>(
 
 //Thread for handling messages sent to a room's users
 async fn messages_posting_to_room<'a>(
-    room_name: String,
     mut post_source: mpsc::Receiver<SyncSendPack>,
     users_in_room: Arc<RwLock<HashMap<String, ClientHandle>>>,
 ) -> Result<'a, ()> {
     while let Some(message_packed) = post_source.recv().await {
         if message_packed.contained_kind == IrcKind::IRC_KIND_POST_MESSAGE {
             let mut clients_to_notify: Vec<mpsc::Sender<SyncSendPack>> = Vec::new();
-            let mut outgoing = message_packed.pmp.unwrap();
+            let outgoing = message_packed.pmp.unwrap();
 
             {
                 let users_in_room_ro;

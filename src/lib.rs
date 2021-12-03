@@ -2,16 +2,12 @@
 // Fall 2021 Term Project: IRC client
 // lib.rs - Common functions and data types for an IRC Client / Server
 
-#![allow(unused_variables)]
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use duplicate::duplicate;
 use lazy_static::lazy_static;
 use num_enum::FromPrimitive;
 use regex::Regex;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::fmt;
 use std::io;
 use thiserror::Error;
@@ -980,7 +976,7 @@ impl IrcPacket for NewClientPacket {
         bytes_out.put_u32(64);
         bytes_out.put_slice(self.chat_name.as_bytes());
         let remain = 64 - self.chat_name.len();
-        for x in 1..remain + 1 {
+        for _x in 1..remain + 1 {
             bytes_out.put_u8(b'\0');
         }
         bytes_out
@@ -1073,7 +1069,7 @@ impl IrcPacket for EnterRoomPacket {
         bytes_out.put_u32(64);
         bytes_out.put_slice(self.room_name.as_bytes());
         let remain = 64 - self.room_name.len();
-        for x in 1..remain + 1 {
+        for _x in 1..remain + 1 {
             bytes_out.put_u8(b'\0');
         }
         bytes_out
@@ -1126,7 +1122,7 @@ impl IrcPacket for LeaveRoomPacket {
         bytes_out.put_u32(64);
         bytes_out.put_slice(self.room_name.as_bytes());
         let remain = 64 - self.room_name.len();
-        for x in 1..remain + 1 {
+        for _x in 1..remain + 1 {
             bytes_out.put_u8(b'\0');
         }
         bytes_out
@@ -1314,7 +1310,7 @@ impl UserListingPacket {
 
     pub fn set_room(&mut self, new_room: &str) -> Result<()> {
         let a_room = valid_name(new_room)?.to_owned();
-        self.room = new_room.to_owned();
+        self.room = a_room.to_owned();
         Ok(())
     }
 }
@@ -1331,7 +1327,7 @@ impl IrcPacket for UserListingPacket {
         for user in &self.users {
             bytes_out.put_slice(user.as_bytes());
             let remain = 64 - user.len();
-            for x in 1..remain + 1 {
+            for _x in 1..remain + 1 {
                 bytes_out.put_u8(b'\0');
             }
         }
@@ -1918,17 +1914,17 @@ pub trait TransferCoreRead {
 )]
 impl TransferCoreRead for transfer_type {
     fn get_to(&self) -> String {
-        let mut outgoing = self.core.recipient.clone();
+        let outgoing = self.core.recipient.clone();
         outgoing
     }
 
     fn get_from(&self) -> String {
-        let mut outgoing = self.core.sender.clone();
+        let outgoing = self.core.sender.clone();
         outgoing
     }
 
     fn get_file_name(&self) -> String {
-        let mut outgoing = self.core.file_name.clone();
+        let outgoing = self.core.file_name.clone();
         outgoing
     }
 

@@ -2,20 +2,15 @@
 // Fall 2021 Term Project: IRC client
 // client_main.rs - Main file implementing an IRC client
 
-
-#![allow(unused_variables)]
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-
 use irclib::*;
 
-use num_enum::FromPrimitive;
+//use num_enum::FromPrimitive;
 use std::env;
-use std::error::Error;
+//use std::error::Error;
 use std::io::{stderr, Write};
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+//use bytes::{Buf, BufMut, Bytes, BytesMut};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{self, Duration};
@@ -23,7 +18,7 @@ use tokio::time::{self, Duration};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use cursive::Cursive;
+//use cursive::Cursive;
 use crate::uilib::*;
 use cursive::view::*;
 use cursive::views::TextView;
@@ -74,10 +69,10 @@ async fn main() -> Result<'static, ()> {
     con.write(&my_ident.as_bytes()).await?;
 
     //thread to thread communication channel for incoming packets to the UI
-    let (tx_to_responder, mut ui_rx) = mpsc::channel::<SyncSendPack>(32);
+    let (tx_to_responder, ui_rx) = mpsc::channel::<SyncSendPack>(32);
 
     //thread to thread communication channel for outgoing packets to the Server
-    let (tx_to_server, mut outgoing_rx) = mpsc::channel::<SyncSendPack>(32);
+    let (tx_to_server, outgoing_rx) = mpsc::channel::<SyncSendPack>(32);
     let tx2 = tx_to_server.clone();
     let tx3 = tx_to_server.clone();
     let tx4 = tx_to_server.clone();
@@ -86,11 +81,11 @@ async fn main() -> Result<'static, ()> {
 
     //Oneshot to retrieve a sender to the Cursive UI's callback channel from the kickstart
     //function.
-    let (tx_cb_to_main, mut rx_cb_from_kickstart) = oneshot::channel::<cursive::CbSink>();
+    let (tx_cb_to_main, rx_cb_from_kickstart) = oneshot::channel::<cursive::CbSink>();
 
     //Start the console UI in it's own OS thread (doesn't play nice with tokio's
     //task management green threads).
-    let ui_thread = thread::spawn(move || ui_kickstart(r3, tx_cb_to_main, tx2, u1));
+    let _ui_thread = thread::spawn(move || ui_kickstart(r3, tx_cb_to_main, tx2, u1));
 
     //Retrieve a handle to the UI's callback endpoint, so we may tell it to react to incoming
     //packets, consumes the Oneshot channel.

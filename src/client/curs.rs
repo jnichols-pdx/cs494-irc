@@ -133,7 +133,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                         });
                     },
                     Some("/offer") => {
-                        if let Some(recipient) = tokens.next() {
+                        if let Some(_recipient) = tokens.next() {
                                 //get file name
                                 //read file if popsible
                                 //send offer packet.
@@ -224,10 +224,10 @@ pub fn focus_input_line(s: &mut Cursive){
 //Builds the First tab in the UI interface, which offers the list of known rooms and options to
 //create new chat rooms.
 pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
-    let mut tx1 = tx_packet_out.clone();
-    let mut tx2 = tx_packet_out.clone();
+    let tx1 = tx_packet_out.clone();
+    let tx2 = tx_packet_out.clone();
     let select = SelectView::<String>::new()
-        .on_submit(move |s,n| {let _ = choose_room(s,n, & tx1);})
+        .on_submit(move |_s,n| {let _ = choose_room(_s, n, & tx1);})
         .with_name("Rooms----------------------select")
         .scrollable()
         .scroll_strategy(ScrollStrategy::StickToBottom)
@@ -297,7 +297,7 @@ pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib:
 
 //Handles when a user clicks on a room name in the Rooms tab list OR highlights a room with the
 //arrow keys and presses Enter.
-pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
+pub fn choose_room<'a>(_s: &mut Cursive, name: &str, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let outgoing = EnterRoomPacket::new(name.to_string())?;
     tx_packet_out.blocking_send(outgoing.into())?;
     Ok(())
