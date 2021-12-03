@@ -15,7 +15,7 @@ use std::io::ErrorKind;
 use std::io::{stderr, Write};
 
 use ctrlc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering, AtomicU16};
 use std::sync::{Arc, RwLock};
 
 #[tokio::main]
@@ -33,16 +33,21 @@ async fn main() -> Result<'static, ()> {
 
     let master_rooms = Arc::new(RwLock::new(HashMap::new())); //<String, RoomHandle>
     let master_users = Arc::new(RwLock::new(HashMap::new())); //<String, ClientHandle>
+    let master_transfers = Arc::new(RwLock::new(HashMap::new())); //<Int, TransferNotes>
 
     let mrc = master_rooms.clone();
     let muc = master_users.clone();
+    let mtc = master_transfers.clone();
+
+    let transfer_count = Arc::new(AtomicU16::new(0));
+    let tc1 = transfer_count.clone();
 
     //let offline_message;
     //blocks until one of the tasks listed returns
     tokio::select! {
         //out = listener_task => {},//offline_message = format!("Response: {:?}",out?);},
         //_ = stop_task => {},//offline_message = "User asked to quit.".into();},
-        out = new_connections(listener, mrc, muc) => {},
+        out = new_connections(listener, mrc, muc, tc1, mtc) => {},
         _ = shutdown_monitor(r2) => {},
     }
 
@@ -78,6 +83,8 @@ async fn new_connections<'a>(
     listener: TcpListener,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
+    transfer_count: Arc<AtomicU16>,
+    master_transfers: Arc<RwLock<HashMap<u16, TransferNotes>>>,
 ) -> Result<'a, ()> {
     loop {
         let (mut socket, _) = listener.accept().await?;
@@ -96,6 +103,7 @@ async fn new_connections<'a>(
                         let new_client = NewClientPacket::from_bytes(&buffer)?;
                         let master_users_copy = master_users.clone();
                         let master_rooms_copy = master_rooms.clone();
+                        let master_transfers_copy = master_transfers.clone();
                         let mut should_reject;
                         {
                             let mut master_users_ro = master_users.read().unwrap();
@@ -135,6 +143,8 @@ async fn new_connections<'a>(
                                 master_users_copy,
                                 new_client_handle2,
                                 channel_source,
+                                transfer_count.clone(),
+                                master_transfers_copy,
                             ));
                         }
                     }
@@ -157,6 +167,8 @@ async fn client_lifecycle<'a>(
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
     mut our_handle: ClientHandle,
     mut channel_source: mpsc::Receiver<SyncSendPack>,
+    transfer_count: Arc<AtomicU16>,
+    master_transfers: Arc<RwLock<HashMap<u16, TransferNotes>>>,
 ) -> Result<'a, ()> {
     //Split the TcpStream into reader and writer, pass each to their own asynchronous task
     let (tcp_in, tcp_out) = socket.into_split();
@@ -170,6 +182,7 @@ async fn client_lifecycle<'a>(
     let (responder_sink, mut responder_source) = mpsc::channel::<SyncSendPack>(32);
     let mrc = master_rooms.clone();
     let muc = master_users.clone();
+    let mtc = master_transfers.clone();
 
     let offline_message: String;
     tokio::select! {
@@ -179,7 +192,7 @@ async fn client_lifecycle<'a>(
                 Err(e) => offline_message = format!("{}",e,),
             };
         },
-        out = responder(client_name.clone(), responder_source, sink3, mrc, muc) => {
+        out = responder(client_name.clone(), responder_source, sink3, mrc, muc, transfer_count, mtc) => {
             match out {
                 Ok(msg) => offline_message = msg,
                 Err(e) => offline_message = format!("{}",e,),
@@ -418,16 +431,20 @@ async fn reader<'a>(
                         tx_to_responder.send(new_direct.into()).await?;
                     }
                     IrcKind::IRC_KIND_OFFER_FILE => {
-                        //println!("Got offer file packet.");
+                        let new_offer = OfferFilePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(new_offer.into()).await?;
                     }
                     IrcKind::IRC_KIND_ACCEPT_FILE => {
-                        // println!("Got accept file packet.");
+                        let new_accept = AcceptFilePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(new_accept.into()).await?;
                     }
                     IrcKind::IRC_KIND_REJECT_FILE => {
-                        // println!("Got reject file packet.");
+                        let new_reject = RejectFilePacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(new_reject.into()).await?;
                     }
                     IrcKind::IRC_KIND_FILE_TRANSFER => {
-                        //  println!("Got file transfer packet.");
+                        let new_file_transfer = FileTransferPacket::from_bytes(&buffer[..])?;
+                        tx_to_responder.send(new_file_transfer.into()).await?;
                     }
                     IrcKind::IRC_KIND_CLIENT_DEPARTS => {
                         let client_leaving = ClientDepartsPacket::from_bytes(&buffer[..])?;
@@ -469,6 +486,8 @@ async fn responder<'a>(
     channel_sink: mpsc::Sender<irclib::SyncSendPack>,
     master_rooms: Arc<RwLock<HashMap<String, RoomHandle>>>,
     master_users: Arc<RwLock<HashMap<String, ClientHandle>>>,
+    transfer_count: Arc<AtomicU16>,
+    master_transfers: Arc<RwLock<HashMap<u16, TransferNotes>>>,
 ) -> Result<'a, String> {
     let mut cached_rooms: HashMap<String, RoomHandle> = HashMap::new(); //<String, RoomHandle>
     let mut cached_users: HashMap<String, ClientHandle> = HashMap::new(); //<String, ClientHandle>
@@ -639,15 +658,343 @@ async fn responder<'a>(
                     };
                 }
             }
-            IrcKind::IRC_KIND_OFFER_FILE => {}
-            IrcKind::IRC_KIND_ACCEPT_FILE => {}
-            IrcKind::IRC_KIND_REJECT_FILE => {}
+
+            //TODO: refactor this shit to use a function for FINDING their current handle.
+            //TODO: incorporate reocrding transfer state for use with ftp packets
+            IrcKind::IRC_KIND_OFFER_FILE => {
+                let mut ofp = packet.ofp.unwrap();
+                let recipient = ofp.get_to();
+                //Did the sender represent themselves faithfully?
+                if ofp.get_from().ne(&client_name) {
+                    let error_reply = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER).unwrap();
+                    channel_sink.send(error_reply.into()).await?;
+                    break; //Closes connection to the offending user.
+                }
+                let new_transfer_id = transfer_count.fetch_add(1, Ordering::SeqCst);
+                let new_transfer_notes = TransferNotes {
+                    file_size: ofp.get_size(),
+                    bytes_seen: 0,
+                    accepted: false,
+                    to_user: ofp.get_to(),
+                    from_user: ofp.get_from(),
+                };
+
+                {
+                        let mut master_transfers_rw;
+                        match master_transfers.write() {
+                            Ok(rw) => master_transfers_rw = rw,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        master_transfers_rw.insert(new_transfer_id.clone(), new_transfer_notes);
+                }
+
+                ofp.set_id(new_transfer_id.clone());
+
+                let mut need_lookup = false;
+                let mut did_send = false;
+                match cached_users.get(&recipient) {
+                    Some(user) => {
+                        match user.send_channel_sink.send(ofp.clone().into()).await {
+                            Ok(_) => {did_send = true;}
+                            // Recipient may have logged off and back on - invalidating the
+                            // cached handle.
+                            Err(_) => {
+                                cached_users.remove(&recipient);
+                                need_lookup = true;
+                            }
+                        };
+                    }
+                    None => {
+                        need_lookup = true;
+                    }
+                };
+
+                if need_lookup {
+                    let their_new_handle: Option<ClientHandle>;
+                    {
+                        let master_users_ro;
+                        match master_users.read() {
+                            Ok(ro) => master_users_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        their_new_handle = match master_users_ro.get(&recipient) {
+                            Some(h) => {
+                                cached_users.insert(recipient.clone(), h.clone());
+                                Some(h.clone())
+                            }
+                            None => None,
+                        }
+                    }
+                    match their_new_handle {
+                        Some(handle) => {
+                            handle.send_channel_sink.send(ofp.into()).await?;
+                            did_send = true;
+                        }
+                        None => {
+                            let mut reply = QueryUserPacket::new(&recipient)?;
+                            reply.set_offline();
+                            channel_sink.send(reply.into()).await?;
+                        }
+                    };
+                }
+                if !did_send {
+                    let mut master_transfers_rw;
+                    match master_transfers.write() {
+                        Ok(rw) => master_transfers_rw = rw,
+                        Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                    }
+                    master_transfers_rw.remove(&new_transfer_id);
+                }
+            }
+            IrcKind::IRC_KIND_ACCEPT_FILE => {
+                let mut afp = packet.afp.unwrap();
+                //attemptForwardWithQueryReply(&ofp, ofp.get_to(), &mut channel_sink, &mut master_rooms, &mut master_users, &mut cached_users).await?;
+                let recipient = afp.get_to();
+                let sender = afp.get_from();
+                let transfer_id = afp.get_transfer_id();
+                //Did the recipient represent themselves faithfully?
+                if recipient.ne(&client_name) {
+                    {
+                        let mut master_transfers_rw;
+                        match master_transfers.write() {
+                            Ok(rw) => master_transfers_rw = rw,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        master_transfers_rw.remove(&transfer_id);
+                    }
+
+                    let error_reply = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER).unwrap();
+                    channel_sink.send(error_reply.into()).await?;
+                   
+                    //TODO: handle notifying the transfer originator that the recipient is no
+                    //longer avaiable. REALLY need a generic 'try sending thing to this user'
+                    //function >.<
+                    
+                    break; //Closes connection to the offending user.
+                }
+
+                let mut valid_transfer = true;
+                {
+                        let mut master_transfers_ro;
+                        match master_transfers.read() {
+                            Ok(ro) => master_transfers_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        match master_transfers_ro.get(&transfer_id) {
+                            Some(transfer) => {
+                                valid_transfer = valid_transfer && transfer.to_user.ne(&afp.get_to());
+                                valid_transfer = valid_transfer && transfer.from_user.ne(&afp.get_from());
+                                valid_transfer = valid_transfer && transfer.file_size.ne(&afp.get_size());
+                            }
+                            None => valid_transfer = false,
+                        }
+
+                }
+                if !valid_transfer{
+                    {
+                        let mut master_transfers_rw;
+                        match master_transfers.write() {
+                            Ok(rw) => master_transfers_rw = rw,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        master_transfers_rw.remove(&transfer_id);
+                    }
+                    let error_reply = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER).unwrap();
+                    channel_sink.send(error_reply.into()).await?;
+                    break; //Closes connection to the offending user.
+                }
+
+                let mut need_lookup = false;
+                let mut did_send = false;
+                match cached_users.get(&recipient) {
+                    Some(user) => {
+                        match user.send_channel_sink.send(afp.clone().into()).await {
+                            Ok(_) => {did_send = true;}
+                            // Recipient may have logged off and back on - invalidating the
+                            // cached handle.
+                            Err(_) => {
+                                cached_users.remove(&sender);
+                                need_lookup = true;
+                            }
+                        };
+                    }
+                    None => {
+                        need_lookup = true;
+                    }
+                };
+
+                if need_lookup {
+                    let their_new_handle: Option<ClientHandle>;
+                    {
+                        let master_users_ro;
+                        match master_users.read() {
+                            Ok(ro) => master_users_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        their_new_handle = match master_users_ro.get(&sender) {
+                            Some(h) => {
+                                cached_users.insert(recipient.clone(), h.clone());
+                                Some(h.clone())
+                            }
+                            None => None,
+                        }
+                    }
+                    match their_new_handle {
+                        Some(handle) => {
+                            handle.send_channel_sink.send(afp.into()).await?;
+                            did_send = true;
+                        }
+                        None => {
+                            let mut reply = QueryUserPacket::new(&sender)?;
+                            reply.set_offline();
+                            channel_sink.send(reply.into()).await?;
+                        }
+                    };
+                }
+                {
+                    let mut master_transfers_rw;
+                    match master_transfers.write() {
+                        Ok(rw) => master_transfers_rw = rw,
+                        Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                    }
+                    if did_send {
+                        match master_transfers_rw.get_mut(&transfer_id){
+                            Some(mut transfer) => {
+                                transfer.accepted = true;
+                            }
+                            None => {/*TODO - handle transfer cancelling in the middle of all this*/},
+                        }
+                    } else{
+                        master_transfers_rw.remove(&transfer_id);
+                    }
+                }
+
+            }
+            IrcKind::IRC_KIND_REJECT_FILE => {
+                let mut rfp = packet.rfp.unwrap();
+                //attemptForwardWithQueryReply(&ofp, ofp.get_to(), &mut channel_sink, &mut master_rooms, &mut master_users, &mut cached_users).await?;
+                let recipient = rfp.get_to();
+                let sender = rfp.get_from();
+                let transfer_id = rfp.get_transfer_id();
+                //Did the recipient represent themselves faithfully?
+                if recipient.ne(&client_name) {
+                    {
+                        let mut master_transfers_rw;
+                        match master_transfers.write() {
+                            Ok(rw) => master_transfers_rw = rw,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        master_transfers_rw.remove(&transfer_id);
+                    }
+                    //HERE -- PROBLEM - DOS available, send spurious packet with NOT your name, and
+                    //someone else's transfer id. Will kill their transfer!! BUG BUG BUG
+
+                    let error_reply = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER).unwrap();
+                    channel_sink.send(error_reply.into()).await?;
+                   
+                    //TODO: handle notifying the transfer originator that the recipient is no
+                    //longer avaiable. REALLY need a generic 'try sending thing to this user'
+                    //function >.<
+                    
+                    break; //Closes connection to the offending user.
+                }
+
+                let mut valid_transfer = true;
+                {
+                        let mut master_transfers_ro;
+                        match master_transfers.read() {
+                            Ok(ro) => master_transfers_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        match master_transfers_ro.get(&transfer_id) {
+                            Some(transfer) => {
+                                valid_transfer = valid_transfer && transfer.to_user.ne(&rfp.get_to());
+                                valid_transfer = valid_transfer && transfer.from_user.ne(&rfp.get_from());
+                                valid_transfer = valid_transfer && transfer.file_size.ne(&rfp.get_size());
+                            }
+                            None => valid_transfer = false,
+                        }
+
+                }
+                //remove it always
+                    {
+                        let mut master_transfers_rw;
+                        match master_transfers.write() {
+                            Ok(rw) => master_transfers_rw = rw,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        master_transfers_rw.remove(&transfer_id);
+                    }
+                let mut need_lookup = false;
+                match cached_users.get(&sender) {
+                    Some(user) => {
+                        match user.send_channel_sink.send(rfp.clone().into()).await {
+                            Ok(_) => {}
+                            // Recipient may have logged off and back on - invalidating the
+                            // cached handle.
+                            Err(_) => {
+                                cached_users.remove(&sender);
+                                need_lookup = true;
+                            }
+                        };
+                    }
+                    None => {
+                        need_lookup = true;
+                    }
+                };
+
+                if need_lookup {
+                    let their_new_handle: Option<ClientHandle>;
+                    {
+                        let master_users_ro;
+                        match master_users.read() {
+                            Ok(ro) => master_users_ro = ro,
+                            Err(e) => return Err(IrcError::PoisonedErr(format!("{}", e))),
+                        }
+                        their_new_handle = match master_users_ro.get(&sender) {
+                            Some(h) => {
+                                cached_users.insert(sender.clone(), h.clone());
+                                Some(h.clone())
+                            }
+                            None => None,
+                        }
+                    }
+                    match their_new_handle {
+                        Some(handle) => {
+                            handle.send_channel_sink.send(rfp.into()).await?;
+                        }
+                        None => {
+                            let mut reply = QueryUserPacket::new(&sender)?;
+                            reply.set_offline();
+                            channel_sink.send(reply.into()).await?;
+                        }
+                    };
+                }
+
+                //disconnect the offending user if they sent us a garbage rejection
+                if !valid_transfer{
+                    let error_reply = ErrorPacket::new(IrcErrCode::IRC_ERR_ILLEGAL_TRANSFER).unwrap();
+                    channel_sink.send(error_reply.into()).await?;
+                    break; //Closes connection to the offending user.
+                }
+
+
+
+                }
             IrcKind::IRC_KIND_FILE_TRANSFER => {}
             _ => {}
         }
     }
     Ok(ret_string.into())
 }
+
+/*async fn attemptForwardWithQueryReply<'a>(outgoing: &dyn IrcPacket, target: String,
+    channel_sink: &mut mpsc::Sender<irclib::SyncSendPack>,
+    master_rooms: &mut Arc<RwLock<HashMap<String, RoomHandle>>>,
+    master_users: &mut Arc<RwLock<HashMap<String, ClientHandle>>>,
+    cached_users: &mut HashMap<String, ClientHandle>
+) -> Result<'a, ()>{
+}*/
 
 async fn make_room<'a>(
     room_name: String,

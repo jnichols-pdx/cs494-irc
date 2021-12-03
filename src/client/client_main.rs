@@ -8,6 +8,8 @@ use num_enum::FromPrimitive;
 use std::env;
 use std::error::Error;
 use std::io::{stderr, Write};
+use std::fs::File;
+use std::path::Path;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
@@ -452,9 +454,11 @@ async fn reader<'a>(
         bytes_peeked = con.peek(&mut peeker).await?;
         if bytes_peeked == 5 {
             let msg_len = u32_from_slice(&peeker[1..5]) as usize;
-            let mut buffer = vec![0; msg_len + 5];
-            let bytes_read = con.read(&mut buffer).await?;
-            if bytes_read == msg_len + 5 {
+            let mut buffer = vec![0u8; msg_len + 5];
+            con.read_exact(&mut buffer).await?;
+            {
+            //let bytes_read = con.read(&mut buffer).await?;
+            //if bytes_read == msg_len + 5 {
                 let kind_raw = IrcKind::from(buffer[0]);
                 match kind_raw {
                     IrcKind::IRC_KIND_ERR => {
@@ -525,7 +529,7 @@ async fn reader<'a>(
                         tx_to_responder.send(new_direct.into()).await?;
                     }
                     IrcKind::IRC_KIND_OFFER_FILE => {
-                        //println!("Got offer file packet.");
+                        // println!("Got offer file packet.");
                     }
                     IrcKind::IRC_KIND_ACCEPT_FILE => {
                         // println!("Got accept file packet.");
@@ -550,7 +554,8 @@ async fn reader<'a>(
                         let _ = writeln!(
                             stderr(),
                             "Error: Unknown packet recieved:\n{:?}\n",
-                            &buffer[0..bytes_read]
+                            //&buffer[0..bytes_read]
+                            &buffer
                         );
                         let error_notice = ErrorPacket::new(IrcErrCode::IRC_ERR_UNKNOWN)
                             .expect("Error packets should be infallible on creation");

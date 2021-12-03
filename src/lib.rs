@@ -29,6 +29,14 @@ pub struct RoomHandle {
     pub leave_channel_sink: mpsc::Sender<String>,
 }
 
+pub struct TransferNotes {
+    pub file_size: u32,
+    pub bytes_seen: u32,
+    pub accepted: bool,
+    pub to_user: String,
+    pub from_user: String,
+}
+
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, FromPrimitive, PartialEq, Debug)]
 #[repr(u8)]
