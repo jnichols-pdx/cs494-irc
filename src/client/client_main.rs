@@ -15,7 +15,6 @@ use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{self, Duration};
 
-use ctrlc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -116,7 +115,7 @@ async fn main() -> Result<'static, ()> {
     //send_task will complete with the outgoing network connection to the server closes.
     //watchdog_task will complete if the server fails to send heartbeats for 30 seconds.
     tokio::select! {
-        out = read_task => {offline_message = format!("{}",out??);},
+        out = read_task => {offline_message = out??;},
         out = responder_task => {offline_message = format!("Response: {:?}",out?);},
         _ = stop_task => {offline_message = "User asked to quit.".into();},
         _ = send_task => {offline_message = "Outgoing channel died...".into();},
@@ -136,8 +135,7 @@ async fn main() -> Result<'static, ()> {
             );
         }));
 
-        match could_prompt {
-            Ok(_) => {
+        if could_prompt.is_ok() {
                 //UI was still responsive - wait for the user to acknowledge the disconnect dialog prompt.
                 let mut wait_period = time::interval(Duration::from_millis(100));
                 loop {
@@ -146,8 +144,6 @@ async fn main() -> Result<'static, ()> {
                         break;
                     }
                 }
-            }
-            Err(_) => {} //UI wasn't responsive (locked up?) - fall through and exit program.
         }
     }
 
@@ -171,8 +167,7 @@ fn ui_kickstart(
     siv.add_global_callback(cursive::event::Event::CtrlChar('q'), |s| s.quit());
 
     let mut panel = TabPanel::new();
-    let tx1 = tx_packet_out.clone();
-    panel.add_tab(make_rooms_page(tx1));
+    panel.add_tab(make_rooms_page(tx_packet_out));
 
     let panelv = panel
         .with_name("TABS__________________________32+")
@@ -242,7 +237,7 @@ async fn responder(
                                 "TABS__________________________32+",
                                 |tab_controller: &mut TabPanel| {
                                     tab_controller.add_tab(make_room(
-                                        room_name.into(),
+                                        room_name,
                                         "".into(),
                                         txr,
                                     ));
@@ -306,8 +301,8 @@ async fn responder(
                                 "TABS__________________________32+",
                                 |tab_controller: &mut TabPanel| {
                                     tab_controller.add_tab(make_dm_room(
-                                        with2.into(),
-                                        format!("{}: {}\n", with_who, dmp.get_message()).into(),
+                                        with2,
+                                        format!("{}: {}\n", with_who, dmp.get_message()),
                                         txr,
                                     ));
                                 },
@@ -327,7 +322,7 @@ async fn responder(
 }
 
 async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
-    let mut seconds_since_heartbeat = 0 as u8;
+    let mut seconds_since_heartbeat = 0u8;
     let mut wait_period = time::interval(Duration::from_millis(1000));
     loop {
         wait_period.tick().await;
@@ -559,15 +554,13 @@ async fn reader<'a>(
                     }
                 }
             }
-        } else {
-            if bytes_peeked == 0 {
+        } else if bytes_peeked == 0 {
                 //println!("Read connection to server has closed.");
                 ret_string = "Read connection to server has closed.".into();
                 break;
-            }
         }
     }
-    Ok(ret_string.into())
+    Ok(ret_string)
 }
 
 #[path = "curs.rs"]

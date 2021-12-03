@@ -14,7 +14,6 @@ use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::io::{stderr, Write};
 
-use ctrlc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -225,7 +224,7 @@ async fn pulse<'a>(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Result<
 }
 
 async fn pulse_monitor<'a>(found_pulse: Arc<AtomicBool>) -> Result<'a, ()> {
-    let mut seconds_since_heartbeat = 0 as u8;
+    let mut seconds_since_heartbeat = 0u8;
     let mut wait_period = time::interval(Duration::from_millis(1000));
     loop {
         wait_period.tick().await;
@@ -452,15 +451,13 @@ async fn reader<'a>(
                     }
                 }
             }
-        } else {
-            if bytes_peeked == 0 {
+        } else if bytes_peeked == 0 {
                 //println!("Read connection to server has closed.");
                 ret_string = "Read connection to client has closed.".into();
                 break;
-            }
         }
     }
-    Ok(ret_string.into())
+    Ok(ret_string)
 }
 
 async fn responder<'a>(
@@ -526,11 +523,8 @@ async fn responder<'a>(
             }
             IrcKind::IRC_KIND_LEAVE_ROOM => {
                 let lrp = packet.lrp.unwrap();
-                match cached_rooms.get(&lrp.room_name) {
-                    Some(rh) => {
+                if let Some(rh) = cached_rooms.get(&lrp.room_name) {
                         rh.leave_channel_sink.send(client_name.clone()).await?;
-                    }
-                    None => {}
                 };
             }
             IrcKind::IRC_KIND_LIST_ROOMS => {
@@ -573,19 +567,16 @@ async fn responder<'a>(
                 let smp = packet.smp.unwrap();
                 let room = smp.room.clone();
                 let message = smp.get_message();
-                match cached_rooms.get(&room) {
-                    Some(rh) => {
+                if let Some(rh) =  cached_rooms.get(&room) {
                         let post_message = PostMessagePacket::new(&room, &client_name, &message)?;
                         rh.post_channel_sink.send(post_message.into()).await?;
-                    }
-                    None => {}
                 };
             }
             IrcKind::IRC_KIND_BROADCAST_MESSAGE => {
                 let bmp = packet.bmp.unwrap();
                 let message = bmp.get_message();
                 for (room, handle) in &cached_rooms {
-                    let post_message = PostMessagePacket::new(&room, &client_name, &message)?;
+                    let post_message = PostMessagePacket::new(room, &client_name, &message)?;
                     handle.post_channel_sink.send(post_message.into()).await?;
                 }
             }
@@ -646,7 +637,7 @@ async fn responder<'a>(
             _ => {}
         }
     }
-    Ok(ret_string.into())
+    Ok(ret_string)
 }
 
 async fn make_room<'a>(
@@ -673,9 +664,9 @@ async fn make_room<'a>(
     ));
 
     let new_room_handle = RoomHandle {
-        join_channel_sink: join_channel_sink,
-        post_channel_sink: post_channel_sink,
-        leave_channel_sink: leave_channel_sink,
+        join_channel_sink,
+        post_channel_sink,
+        leave_channel_sink,
     };
 
     //Add this room to the master list and inform all users

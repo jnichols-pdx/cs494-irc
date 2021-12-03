@@ -38,8 +38,7 @@ pub fn make_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender
 
     //The outermost layout view that will be directly contained by a tabview gets the raw room
     //name, permitting that user chosen name to show up in the tabview's user interface.
-    let tab_contents = LinearLayout::vertical().child(sideways).child(Panel::new(input).min_height(3)).full_screen().with_name(name);
-    tab_contents
+    LinearLayout::vertical().child(sideways).child(Panel::new(input).min_height(3)).full_screen().with_name(name)
 }
 
 pub fn make_dm_room(name: String, initial_text: String, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> NamedView<ResizedView<cursive::views::LinearLayout>> {
@@ -62,10 +61,11 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
     //Which tab are we in.
     let current_tab = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
         let current_tab = tab_controller.active_tab();
-        match current_tab {
+        current_tab.map(|tab_name| tab_name.to_owned())
+        /*match current_tab {
             Some(tab_name) => Some(tab_name.to_owned()),
             None => None,
-        }
+        }*/
     });
     match current_tab.unwrap() {
         Some(tab_name) => {
@@ -74,27 +74,22 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                 edit.set_content("");
             });
             //Look for commands
-            if text.chars().nth(0) == Some('/')  {
+            if text.starts_with('/')  {
                 //Appears to be a command.
                 let mut tokens = text.split_whitespace();
                 match tokens.next() {
                     Some("/enter") | Some("/join") => {
-                        match tokens.next() {
-                            Some(room_name) => {
-                                let outgoing = EnterRoomPacket::new(&room_name.to_string())?;
+                        if let Some(room_name) = tokens.next() {
+                                let outgoing = EnterRoomPacket::new(room_name.to_string())?;
                                 tx_packet_out.blocking_send(outgoing.into())?;
-                            },
-                            None => (),
                         };
                     },
                     Some("/whisper") | Some("/tell") => {
-                        match tokens.next() {
-                            Some(user_name) => {
+                        if let Some(user_name) = tokens.next() {
                                 let message_start = text.find(user_name).unwrap() + user_name.len();
                                 let body_text = &text[message_start..].trim_start().to_string();
-                                let outgoing = DirectMessagePacket::new(&user_name.to_string(), &body_text)?;
+                                let outgoing = DirectMessagePacket::new(&user_name.to_string(), body_text)?;
                                 tx_packet_out.blocking_send(outgoing.into())?;
-                                let txr = tx_packet_out.clone();
 
                                 //create the conversation tab if necessary, and echo display
                                 //outgoing message.
@@ -104,47 +99,37 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                                     },
                                     None =>{
                                         s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
-                                            tab_controller.add_tab(make_dm_room(user_name.into(),format!("You: {}\n", body_text).into(), txr));
+                                            tab_controller.add_tab(make_dm_room(user_name.into(),format!("You: {}\n", body_text), tx_packet_out));
                                         });
                                     },
                                 };
-                            },
-                            None => (),
                         };
                     },
                     Some("/status") => {
-                        match tokens.next() {
-                            Some(user_name) => {
+                        if let Some(user_name) =  tokens.next() {
                                 let outgoing = QueryUserPacket::new(&user_name.to_string())?;
                                 tx_packet_out.blocking_send(outgoing.into())?;
-                            },
-                            None => (),
                         };
                     },
                     Some("/leave") => {
                         if !is_dm {
                             //If this is a chat room tab, Tell the server we are leaving the room
-                            let outgoing = LeaveRoomPacket::new(&tab_name.to_string())?;
+                            let outgoing = LeaveRoomPacket::new(tab_name)?;
                             tx_packet_out.blocking_send(outgoing.into())?;
                         }
                         s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
                             //TODO: fix dirty code, ignores Err returned by remove_tab and unwrap    
                             let current_tab = tab_controller.active_tab().unwrap().to_owned();
                             tab_controller.prev();
-                            let _ = tab_controller.remove_tab(&current_tab.as_str());
+                            let _ = tab_controller.remove_tab(current_tab.as_str());
                         });
                     },
                     Some("/offer") => {
-                        match tokens.next() {
-                            Some(recipient) => {
+                        if let Some(recipient) = tokens.next() {
                                 //get file name
                                 //read file if popsible
                                 //send offer packet.
                                 //register pending transfer...
-
-
-                            },
-                            None => {},
                         }
 
                         s.call_on_name(format!("{}-------------------------content", tab_name).as_str(), |content: &mut TextView| {
@@ -158,7 +143,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                         } else {
                             body_text = text.split_at(10).1.trim_start();
                         }
-                        if body_text.len() > 0 {
+                        if !body_text.is_empty() {
                             let outgoing = BroadcastMessagePacket::new(&body_text.to_string())?;
                             tx_packet_out.blocking_send(outgoing.into())?;
                         }
@@ -169,7 +154,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                 //Not a command, send text to a room or DM conversation!
 
                 let body_text = text.trim_start();
-                if body_text.len() > 0 {
+                if !body_text.is_empty() {
                     if is_dm {
                         //local echo of outgoing text:
                         let outgoing = DirectMessagePacket::new(&tab_name[3..].to_string(), &body_text.to_string())?;
@@ -178,7 +163,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
                         });
                         tx_packet_out.blocking_send(outgoing.into())?;
                     } else {
-                        let outgoing = SendMessagePacket::new(&tab_name.to_string(), &body_text.to_string())?;
+                        let outgoing = SendMessagePacket::new(&tab_name, &body_text.to_string())?;
                         tx_packet_out.blocking_send(outgoing.into())?;
                     }
 
@@ -186,7 +171,7 @@ pub fn accept_input<'a>(s: &mut Cursive, text: &str, tx_packet_out: mpsc::Sender
             }
 
         },
-        None => (), //error state, how did we send commands when there is no room tab? TODO: Handle error meaningfully
+        None => (println!("command to nonexistant room!")), //error state, how did we send commands when there is no room tab? TODO: Handle error meaningfully
     };
     Ok(())
 }
@@ -211,20 +196,15 @@ pub fn focus_input_line(s: &mut Cursive){
     
     let current_tab_opt_opt = s.call_on_name("TABS__________________________32+", |tab_controller: &mut TabPanel|  {
         let current_tab_opt = tab_controller.active_tab();
-        match current_tab_opt {
-            Some(tab_name) => Some(tab_name.to_owned()),
-            None => None,
-        }
+        current_tab_opt.map(|tab_name| tab_name.to_owned())
     });
 
-    match current_tab_opt_opt.unwrap() {
-        Some(tab_name) => {
-            match s.focus_name(format!("{}---------------------------input", tab_name).as_str()) {
+    if let Some(tab_name) = current_tab_opt_opt.unwrap() {
+            /*match s.focus_name(format!("{}---------------------------input", tab_name).as_str()) {
                 Ok(_) => {},
                 Err(_) => {},
-            };
-        },
-        None => (),
+            };*/
+            let _ = s.focus_name(format!("{}---------------------------input", tab_name).as_str());
     };
 
 }
@@ -233,9 +213,8 @@ pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Nam
 
     let mut tx1 = tx_packet_out.clone();
     let mut tx2 = tx_packet_out.clone();
-    let mut tx3 = tx_packet_out.clone();
     let select = SelectView::<String>::new()
-        .on_submit(move |s,n| {let _ = choose_room(s,n, & tx2);})
+        .on_submit(move |s,n| {let _ = choose_room(s,n, & tx1);})
         .with_name("Rooms----------------------select")
         .scrollable()
         .scroll_strategy(ScrollStrategy::StickToBottom)
@@ -245,28 +224,36 @@ pub fn make_rooms_page(tx_packet_out: mpsc::Sender<irclib::SyncSendPack>) -> Nam
     .full_height();
     let buttons = LinearLayout::vertical()
         .child(spacer)
-        .child(Button::new("New",move |s|{let txi = tx3.clone();let _ =  new_room_button(s, txi);}))
+        .child(Button::new("New",move |s|{let txi = tx2.clone();let _ =  new_room_button(s, txi);}))
         .child(DummyView)
-        .child(Button::new("Join", move |s| {let _ = choose_room_button(s,& tx1);}));
+        .child(Button::new("Join", move |s| {let _ = choose_room_button(s,& tx_packet_out);}));
 
-    let pane = LinearLayout::horizontal()
+    LinearLayout::horizontal()
         .child(Panel::new(select))
         .child(buttons)
         .full_height()
-        .with_name("<Rooms>");
-
-    pane
-
+        .with_name("<Rooms>")
 }
+
 pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
     let txf = tx_packet_out.clone();
-    let txb = tx_packet_out.clone();
-    fn send_new_packet<'a>(s: &mut Cursive, new_room_name: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>){
-                match EnterRoomPacket::new(&new_room_name.to_string()) {
-                   Ok(out) => {let _ = tx_packet_out.blocking_send(out.into());}, //TODO: error message on invalid roomname
-                   Err(_) => (),
-                };
+    fn send_new_packet(s: &mut Cursive, new_room_name: &str, tx_packet_out: mpsc::Sender<irclib::SyncSendPack>){
+        match EnterRoomPacket::new(new_room_name.to_string()) {
+           Ok(out) => {
+                let _ = tx_packet_out.blocking_send(out.into());
                 s.pop_layer();
+           },
+           Err(_) => {
+                s.add_layer(Dialog::around(TextView::new("Sorry, room names don't allow spaces or certain directional characters."))
+                    .title("Invalid Room Name")
+                    .dismiss_button("Darn")
+                    .wrap_with(OnEventView::new)
+                    .on_pre_event(Key::Esc, |s| {
+                        s.pop_layer();
+                    })
+                );
+           },
+        };
     }
 
     s.add_layer(Dialog::around(EditView::new()
@@ -282,7 +269,7 @@ pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib:
                 let new_room_name = s.call_on_name("New_Room_Name_Field--------------", |input_field: &mut EditView| {
                     input_field.get_content()
                 }).unwrap();
-                let txi = txb.clone();
+                let txi = tx_packet_out.clone();
                 let _ = send_new_packet(s,&new_room_name.to_string(), txi);
             })
             .wrap_with(OnEventView::new)
@@ -295,7 +282,7 @@ pub fn new_room_button<'a>(s: &mut Cursive, tx_packet_out:  mpsc::Sender<irclib:
 
 
 pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
-    let outgoing = EnterRoomPacket::new(&name.to_string())?;
+    let outgoing = EnterRoomPacket::new(name.to_string())?;
     tx_packet_out.blocking_send(outgoing.into())?;
     Ok(())
 }
@@ -303,12 +290,9 @@ pub fn choose_room<'a>(s: &mut Cursive, name: &str, tx_packet_out: & mpsc::Sende
 pub fn choose_room_button<'a>(s: &mut Cursive, tx_packet_out: & mpsc::Sender<irclib::SyncSendPack>) -> Result<'a, ()> {
 
     let select_ref = s.find_name::<SelectView<String>>("Rooms----------------------select").unwrap();
-    match select_ref.selection() {
-        Some(n) =>{
-            let outgoing = EnterRoomPacket::new(&n.to_string())?;
+    if let Some(n) = select_ref.selection() {
+            let outgoing = EnterRoomPacket::new(n.to_string())?;
             tx_packet_out.blocking_send(outgoing.into())?;
-        },
-        None =>{}
     };
     Ok(())
 }

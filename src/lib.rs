@@ -320,7 +320,7 @@ pub fn name_from_slice(source: &[u8]) -> Result<String> {
     if source.len() != 64 {
         return Err(IrcError::PacketLengthIncorrect(source.len(), 64));
     }
-    match String::from_utf8(get_sixtyfour_bytes_as_array(&source).to_vec()) {
+    match String::from_utf8(get_sixtyfour_bytes_as_array(source).to_vec()) {
         Ok(mut n) => match n.find('\0') {
             Some(pos) => {
                 n.truncate(pos);
@@ -972,7 +972,7 @@ impl IrcPacket for NewClientPacket {
         let mut bytes_out = BytesMut::with_capacity(69);
         bytes_out.put_u8(IrcKind::IRC_KIND_NEW_CLIENT as u8);
         bytes_out.put_u32(64);
-        bytes_out.put_slice(&self.chat_name.as_bytes());
+        bytes_out.put_slice(self.chat_name.as_bytes());
         let remain = 64 - self.chat_name.len();
         for x in 1..remain + 1 {
             bytes_out.put_u8(b'\0');
@@ -1052,8 +1052,8 @@ pub struct EnterRoomPacket {
 }
 
 impl EnterRoomPacket {
-    pub fn new(roomname: &String) -> Result<Self> {
-        let v_roomname = valid_name(roomname)?;
+    pub fn new<'a>(roomname: String) -> Result<'a,Self> {
+        let v_roomname = valid_name(&roomname)?;
         Ok(EnterRoomPacket {
             room_name: v_roomname.to_owned(),
         })
@@ -1065,7 +1065,7 @@ impl IrcPacket for EnterRoomPacket {
         let mut bytes_out = BytesMut::with_capacity(69);
         bytes_out.put_u8(IrcKind::IRC_KIND_ENTER_ROOM as u8);
         bytes_out.put_u32(64);
-        bytes_out.put_slice(&self.room_name.as_bytes());
+        bytes_out.put_slice(self.room_name.as_bytes());
         let remain = 64 - self.room_name.len();
         for x in 1..remain + 1 {
             bytes_out.put_u8(b'\0');
@@ -1105,8 +1105,8 @@ pub struct LeaveRoomPacket {
 }
 
 impl LeaveRoomPacket {
-    pub fn new(roomname: &String) -> Result<Self> {
-        let v_roomname = valid_name(roomname)?;
+    pub fn new<'a>(roomname: String) -> Result<'a,Self> {
+        let v_roomname = valid_name(&roomname)?;
         Ok(LeaveRoomPacket {
             room_name: v_roomname.to_owned(),
         })
@@ -1118,7 +1118,7 @@ impl IrcPacket for LeaveRoomPacket {
         let mut bytes_out = BytesMut::with_capacity(69);
         bytes_out.put_u8(IrcKind::IRC_KIND_LEAVE_ROOM as u8);
         bytes_out.put_u32(64);
-        bytes_out.put_slice(&self.room_name.as_bytes());
+        bytes_out.put_slice(self.room_name.as_bytes());
         let remain = 64 - self.room_name.len();
         for x in 1..remain + 1 {
             bytes_out.put_u8(b'\0');
@@ -1202,14 +1202,14 @@ impl RoomListingPacket {
         Ok(RoomListingPacket { rooms: Vec::new() })
     }
 
-    pub fn from_vec(new_rooms: &Vec<String>) -> Result<'static, Self> {
+    pub fn from_vec(new_rooms: &[String]) -> Result<'static, Self> {
         Ok(RoomListingPacket {
             rooms: new_rooms.to_owned(), //takes ownership..?
         })
     }
 
-    pub fn push(&mut self, room: &String) -> Result<()> {
-        let a_room = valid_name(&room)?.to_owned();
+    pub fn push(&mut self, room: &str) -> Result<()> {
+        let a_room = valid_name(room)?.to_owned();
         self.rooms.push(a_room);
         Ok(())
     }
@@ -1222,7 +1222,7 @@ impl IrcPacket for RoomListingPacket {
         bytes_out.put_u32(64 + (64 * self.rooms.len()) as u32);
         bytes_out.put_bytes(b'\0', 64);
         for room in &self.rooms {
-            bytes_out.put_slice(&room.as_bytes());
+            bytes_out.put_slice(room.as_bytes());
             let remain = 64 - room.len();
             bytes_out.put_bytes(b'\0', remain);
             /*for x in 1..remain+1 {
@@ -1293,21 +1293,21 @@ impl UserListingPacket {
         })
     }
 
-    pub fn from_room_and_vec(new_room: &String, new_users: &Vec<String>) -> Result<'static, Self> {
+    pub fn from_room_and_vec(new_room: &str, new_users: &[String]) -> Result<'static, Self> {
         Ok(UserListingPacket {
             users: new_users.to_owned(),
             room: new_room.to_owned(),
         })
     }
 
-    pub fn push(&mut self, user: &String) -> Result<()> {
-        let a_user = valid_name(&user)?.to_owned();
-        self.users.push(a_user.to_owned());
+    pub fn push(&mut self, user: &str) -> Result<()> {
+        let a_user = valid_name(user)?.to_owned();
+        self.users.push(a_user);
         Ok(())
     }
 
-    pub fn set_room(&mut self, new_room: &String) -> Result<()> {
-        let a_room = valid_name(&new_room)?.to_owned();
+    pub fn set_room(&mut self, new_room: &str) -> Result<()> {
+        let a_room = valid_name(new_room)?.to_owned();
         self.room = new_room.to_owned();
         Ok(())
     }
@@ -1319,11 +1319,11 @@ impl IrcPacket for UserListingPacket {
         bytes_out.put_u8(IrcKind::IRC_KIND_USER_LISTING as u8);
         bytes_out.put_u32(64 + (64 * self.users.len()) as u32);
 
-        bytes_out.put_slice(&self.room.as_bytes());
+        bytes_out.put_slice(self.room.as_bytes());
         let remain = 64 - self.room.len();
         bytes_out.put_bytes(b'\0', remain);
         for user in &self.users {
-            bytes_out.put_slice(&user.as_bytes());
+            bytes_out.put_slice(user.as_bytes());
             let remain = 64 - user.len();
             for x in 1..remain + 1 {
                 bytes_out.put_u8(b'\0');
@@ -1412,7 +1412,7 @@ pub struct QueryUserPacket {
 }
 
 impl QueryUserPacket {
-    pub fn new(username: &String) -> Result<Self> {
+    pub fn new(username: &str) -> Result<Self> {
         let v_username = valid_name(username)?;
         Ok(QueryUserPacket {
             user_name: v_username.to_owned(),
@@ -1437,7 +1437,7 @@ impl IrcPacket for QueryUserPacket {
         let mut bytes_out = BytesMut::with_capacity(70);
         bytes_out.put_u8(IrcKind::IRC_KIND_QUERY_USER as u8);
         bytes_out.put_u32(65);
-        bytes_out.put_slice(&self.user_name.as_bytes());
+        bytes_out.put_slice(self.user_name.as_bytes());
         let remain = 64 - self.user_name.len();
         bytes_out.put_bytes(b'\0', remain);
         bytes_out.put_u8(self.status as u8);
@@ -1483,11 +1483,11 @@ pub struct SendMessagePacket {
 }
 
 impl SendMessagePacket {
-    pub fn new<'x>(to_room: &String, message: &String) -> Result<'x, SendMessagePacket> {
+    pub fn new<'x>(to_room: &str, message: &str) -> Result<'x, SendMessagePacket> {
         let v_room = valid_name(to_room)?;
         let mut v_message;
         if message.ends_with('\0') {
-            v_message = valid_message(&message)?.to_owned();
+            v_message = valid_message(message)?.to_owned();
         } else {
             v_message = message.to_owned();
             v_message.push('\0');
@@ -1512,10 +1512,10 @@ impl IrcPacket for SendMessagePacket {
         let mut bytes_out = BytesMut::with_capacity(5 + 64 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_SEND_MESSAGE as u8);
         bytes_out.put_u32(64 + (message_bytelength as u32));
-        bytes_out.put_slice(&self.room.as_bytes());
+        bytes_out.put_slice(self.room.as_bytes());
         let remain = 64 - self.room.len();
         bytes_out.put_bytes(b'\0', remain);
-        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out.put_slice(self.message.as_bytes());
         bytes_out
     }
 
@@ -1556,10 +1556,10 @@ pub struct BroadcastMessagePacket {
 }
 
 impl BroadcastMessagePacket {
-    pub fn new(message: &String) -> Result<BroadcastMessagePacket> {
+    pub fn new(message: &str) -> Result<BroadcastMessagePacket> {
         let mut v_message;
         if message.ends_with('\0') {
-            v_message = valid_message(&message)?.to_owned();
+            v_message = valid_message(message)?.to_owned();
         } else {
             v_message = message.to_owned();
             v_message.push('\0');
@@ -1583,7 +1583,7 @@ impl IrcPacket for BroadcastMessagePacket {
         let mut bytes_out = BytesMut::with_capacity(5 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_BROADCAST_MESSAGE as u8);
         bytes_out.put_u32(message_bytelength as u32);
-        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out.put_slice(self.message.as_bytes());
         bytes_out
     }
 
@@ -1624,15 +1624,15 @@ pub struct PostMessagePacket {
 
 impl PostMessagePacket {
     pub fn new<'x>(
-        to_room: &String,
-        from_user: &String,
-        message: &String,
+        to_room: &str,
+        from_user: &str,
+        message: &str,
     ) -> Result<'x, PostMessagePacket> {
         let v_room = valid_name(to_room)?;
         let v_sender = valid_name(from_user)?;
         let mut v_message;
         if message.ends_with('\0') {
-            v_message = valid_message(&message)?.to_owned();
+            v_message = valid_message(message)?.to_owned();
         } else {
             v_message = message.to_owned();
             v_message.push('\0');
@@ -1658,13 +1658,13 @@ impl IrcPacket for PostMessagePacket {
         let mut bytes_out = BytesMut::with_capacity(5 + 64 + 64 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_POST_MESSAGE as u8);
         bytes_out.put_u32(64 + 64 + (message_bytelength as u32));
-        bytes_out.put_slice(&self.room.as_bytes());
+        bytes_out.put_slice(self.room.as_bytes());
         let remain = 64 - self.room.len();
         bytes_out.put_bytes(b'\0', remain);
-        bytes_out.put_slice(&self.sender.as_bytes());
+        bytes_out.put_slice(self.sender.as_bytes());
         let remain = 64 - self.sender.len();
         bytes_out.put_bytes(b'\0', remain);
-        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out.put_slice(self.message.as_bytes());
         bytes_out
     }
 
@@ -1709,11 +1709,11 @@ pub struct DirectMessagePacket {
 }
 
 impl DirectMessagePacket {
-    pub fn new<'x>(to_target: &String, message: &String) -> Result<'x, DirectMessagePacket> {
+    pub fn new<'x>(to_target: &str, message: &str) -> Result<'x, DirectMessagePacket> {
         let v_target = valid_name(to_target)?;
         let mut v_message;
         if message.ends_with('\0') {
-            v_message = valid_message(&message)?.to_owned();
+            v_message = valid_message(message)?.to_owned();
         } else {
             v_message = message.to_owned();
             v_message.push('\0');
@@ -1738,10 +1738,10 @@ impl IrcPacket for DirectMessagePacket {
         let mut bytes_out = BytesMut::with_capacity(5 + 64 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_DIRECT_MESSAGE as u8);
         bytes_out.put_u32(64 + (message_bytelength as u32));
-        bytes_out.put_slice(&self.target.as_bytes());
+        bytes_out.put_slice(self.target.as_bytes());
         let remain = 64 - self.target.len();
         bytes_out.put_bytes(b'\0', remain);
-        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out.put_slice(self.message.as_bytes());
         bytes_out
     }
 
@@ -1802,21 +1802,21 @@ pub struct RejectFilePacket {
 
 impl TransferCore {
     pub fn new<'x>(
-        to_user: &String,
-        from_user: &String,
+        to_user: &str,
+        from_user: &str,
         size: u32,
-        file_name: &String,
+        file_name: &str,
     ) -> Result<'x, TransferCore> {
-        let v_recipient = valid_name(&to_user)?;
-        let v_sender = valid_name(&from_user)?;
-        let v_file_name = valid_filename(&file_name)?.to_owned();
+        let v_recipient = valid_name(to_user)?;
+        let v_sender = valid_name(from_user)?;
+        let v_file_name = valid_filename(file_name)?.to_owned();
 
         Ok(TransferCore {
             recipient: v_recipient.to_owned(),
             sender: v_sender.to_owned(),
             transfer_id: 0,
             file_size: size,
-            file_name: v_file_name.to_owned(),
+            file_name: v_file_name,
         })
     }
 
@@ -1826,18 +1826,18 @@ impl TransferCore {
 
     pub fn byte_length(&self) -> usize {
         let filename_bytelength = self.file_name.len();
-        return 64 + 64 + 2 + 4 + filename_bytelength;
+        64 + 64 + 2 + 4 + filename_bytelength
     }
 
     fn as_bytes(&self) -> BytesMut {
         let content_length = self.byte_length();
         let mut bytes_out = BytesMut::with_capacity(content_length);
 
-        bytes_out.put_slice(&self.recipient.as_bytes());
+        bytes_out.put_slice(self.recipient.as_bytes());
         let remain = 64 - self.recipient.len();
         bytes_out.put_bytes(b'\0', remain);
 
-        bytes_out.put_slice(&self.sender.as_bytes());
+        bytes_out.put_slice(self.sender.as_bytes());
         let remain = 64 - self.sender.len();
         bytes_out.put_bytes(b'\0', remain);
 
@@ -1845,7 +1845,7 @@ impl TransferCore {
 
         bytes_out.put_u32(self.file_size);
 
-        bytes_out.put_slice(&self.file_name.as_bytes());
+        bytes_out.put_slice(self.file_name.as_bytes());
         bytes_out
     }
 
@@ -1967,10 +1967,10 @@ impl IrcPacket for TRANSFER_TYPE {
 
 impl OfferFilePacket {
     pub fn new<'x>(
-        to_user: &String,
-        from_user: &String,
+        to_user: &str,
+        from_user: &str,
         size: u32,
-        file_name: &String,
+        file_name: &str,
     ) -> Result<'x, OfferFilePacket> {
         Ok(OfferFilePacket {
             core: TransferCore::new(to_user, from_user, size, file_name)?,
@@ -1980,11 +1980,11 @@ impl OfferFilePacket {
 
 impl AcceptFilePacket {
     pub fn new<'x>(
-        to_user: &String,
-        from_user: &String,
+        to_user: &str,
+        from_user: &str,
         transfer_id: u16,
         size: u32,
-        file_name: &String,
+        file_name: &str,
     ) -> Result<'x, AcceptFilePacket> {
         let mut new_core = TransferCore::new(to_user, from_user, size, file_name)?;
         new_core.set_id(transfer_id);
@@ -2000,11 +2000,11 @@ impl AcceptFilePacket {
 
 impl RejectFilePacket {
     pub fn new<'x>(
-        to_user: &String,
-        from_user: &String,
+        to_user: &str,
+        from_user: &str,
         transfer_id: u16,
         size: u32,
-        file_name: &String,
+        file_name: &str,
     ) -> Result<'x, RejectFilePacket> {
         let mut new_core = TransferCore::new(to_user, from_user, size, file_name)?;
         new_core.set_id(transfer_id);
@@ -2037,7 +2037,7 @@ impl FileTransferPacket {
         if data.len() > 4096 {
             return Err(IrcError::TooManyBytes(data.len(), 4096));
         }
-        if data.len() == 0 {
+        if data.is_empty() {
             return Err(IrcError::InvalidEmpty());
         }
 
@@ -2078,7 +2078,7 @@ impl IrcPacket for FileTransferPacket {
         }
 
         let new_transfer_id = u16_from_slice(&source[5..7]);
-        let new_finished = &source[7] > &0;
+        let new_finished = source[7] > 0;
 
         let new_data: Bytes = Bytes::copy_from_slice(&source[8..]);
 
@@ -2100,10 +2100,10 @@ pub struct ClientDepartsPacket {
 }
 
 impl ClientDepartsPacket {
-    pub fn new<'x>(message: &String) -> Result<'x, ClientDepartsPacket> {
+    pub fn new<'x>(message: &str) -> Result<'x, ClientDepartsPacket> {
         let mut v_message;
         if message.ends_with('\0') {
-            v_message = valid_message(&message)?.to_owned();
+            v_message = valid_message(message)?.to_owned();
         } else {
             v_message = message.to_owned();
             v_message.push('\0');
@@ -2127,7 +2127,7 @@ impl IrcPacket for ClientDepartsPacket {
         let mut bytes_out = BytesMut::with_capacity(5 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_CLIENT_DEPARTS as u8);
         bytes_out.put_u32(message_bytelength as u32);
-        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out.put_slice(self.message.as_bytes());
         bytes_out
     }
 
@@ -2165,10 +2165,10 @@ pub struct ServerDepartsPacket {
 }
 
 impl ServerDepartsPacket {
-    pub fn new<'x>(message: &String) -> Result<'x, ServerDepartsPacket> {
+    pub fn new<'x>(message: &str) -> Result<'x, ServerDepartsPacket> {
         let mut v_message;
         if message.ends_with('\0') {
-            v_message = valid_message(&message)?.to_owned();
+            v_message = valid_message(message)?.to_owned();
         } else {
             v_message = message.to_owned();
             v_message.push('\0');
@@ -2192,7 +2192,7 @@ impl IrcPacket for ServerDepartsPacket {
         let mut bytes_out = BytesMut::with_capacity(5 + (message_bytelength as usize));
         bytes_out.put_u8(IrcKind::IRC_KIND_SERVER_DEPARTS as u8);
         bytes_out.put_u32(message_bytelength as u32);
-        bytes_out.put_slice(&self.message.as_bytes());
+        bytes_out.put_slice(self.message.as_bytes());
         bytes_out
     }
 
